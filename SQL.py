@@ -23,6 +23,7 @@ class SQL:
 
     def add(self, username, email, password):
         # Añadir nuevo usuario a la base de datos
+        username, email = username.lower(), email.lower()
         self.cursor.execute(
             "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
             (username, email, password))
@@ -30,7 +31,6 @@ class SQL:
 
     def check_user(self, username_or_email, password):
         # Buscar usuario por nombre de usuario o email
-        username_or_email.lower()
         user = self.cursor.execute(
             "SELECT * FROM users WHERE username=? OR email=?",
             (username_or_email, username_or_email)).fetchone()

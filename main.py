@@ -44,11 +44,27 @@ def listar_usuarios():
         abort(404)
     user = db.cursor.execute("SELECT role FROM users WHERE username=?",
                              (session["username"],)).fetchone()
+    if not user:
+        user = db.cursor.execute("SELECT role FROM users WHERE email=?",
+                                 (session["username"],)).fetchone()
     if user["role"] != "admin":
         abort(404)
     usuarios = db.cursor.execute(
         "SELECT id, username, email, password FROM users").fetchall()
     return render_template("users.html", usuarios=usuarios)
+
+
+# def registrar_admin():
+#     username = input("Inserte el nombre de usuario para el admin:\n")
+#     email = input("Inserte el correo electrónico:\n")
+#     password = input("Inserte la contraseña:\n")
+#
+#     db.add(username, email, password, 'admin')  # Asignamos el rol 'admin'
+#     print(f"Usuario admin '{username}' registrado con éxito.")
+#
+#
+# # Llama a esta función solo una vez
+# registrar_admin()
 
 
 if __name__ == "__main__":
