@@ -1,42 +1,44 @@
 import sqlite3
-import random
+
 
 class SQL:
-    def __init__(self):
+    def __init__(self, db_name="users.db"):
+        self.connection = sqlite3.connect(db_name, check_same_thread=False)
+        self.connection.row_factory = sqlite3.Row
+        self.cursor = self.connection.cursor()
+        self.create_table()
 
+    def create_table(self):
+        # Crea la tabla de usuarios si no existe
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                email TEXT NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT DEFAULT "user"
+            )
+        ''')
+        self.connection.commit()
 
+    def add(self, username, email, password):
+        # Añadir nuevo usuario a la base de datos
+        self.cursor.execute(
+            "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+            (username, email, password))
+        self.connection.commit()
 
+    def check_user(self, username_or_email, password):
+        # Buscar usuario por nombre de usuario o email
+        username_or_email.lower()
+        user = self.cursor.execute(
+            "SELECT * FROM users WHERE username=? OR email=?",
+            (username_or_email, username_or_email)).fetchone()
+        if user:
+            stored_password = user["password"]
+            if stored_password == password:
+                return True
+        return False
 
-    """def add(self, user, password, email):
-        password, salt = _cyp_password(password)
-        sql.append(user, password, email, salt)"""
-
-    """def _cyp_password(self, password):
-        salt_lenght = 25 - len(password)
-        salt = random.randbytes(salt_lenght)
-        password.append(salt)
-        return password, salt"""
-
-    """def check(self, user, password):
-        if "@" not in user:
-            if cifrado(password) != table[user][password]:
-                return False
-        else:
-            if cifrado(password) != table[email][password]:
-                return False
-        return True"""
-
-    """def get_email_from_user(user):
-        if user not in table:
-            return False
-        else:
-            return(table[user, email])"""
-
-    """def get_user_from_email(email):
-        if email not in table:
-            reutrn True
-        else:
-            return(table[email, user]"""
-
-    """def change_password(email, password)
-        """
+    def close(self):
+        self.connection.close()
