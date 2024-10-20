@@ -39,6 +39,13 @@ class SQL:
             if stored_password == password:
                 return True
         return False
+    def remove_user(self, username_or_email, password):
+        self.cursor.execute("DELETE FROM usuarios WHERE (username = ? OR email = ?) AND password = ?",
+                                   (username_or_email, username_or_email, password)).fetchone()
+        if self.cursor.rowcount > 0:
+            return True
+        else:
+            return False
 
     def close(self):
         self.connection.close()

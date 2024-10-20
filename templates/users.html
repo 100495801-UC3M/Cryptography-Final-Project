@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="es-es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Usuarios Registrados</title>
+    <title>Lista de Usuarios</title>
     <link rel="stylesheet" href="../static/styles.css">
 </head>
 <body>
+    <a href="..">Volver</a>
     <h1>Lista de Usuarios Registrados</h1>
     <ul>
         {% for usuario in usuarios %}
@@ -15,5 +16,6 @@
                 Contraseña: {{usuario["password"]}}</li>
         {% endfor %}
     </ul>
+
 </body>
 </html>
