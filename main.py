@@ -22,7 +22,7 @@ def registro():
         email = request.form["email"]
         password = request.form["password"]
         if not verificar_password(password):
-            print("La contraseña es inválida. Debe tener un mínimo de 6 caracteres, "
+            return("La contraseña es inválida. Debe tener un mínimo de 6 caracteres, "
                   "una mayúscula, una minúscula, un número y un carácter especial ($!%*?&_-).", "error")
             return render_template("register.html")  # Devolver el formulario con un mensaje de error
         db.add(username, email, password)
@@ -47,16 +47,21 @@ ruta = re.sub(r'^(\/).*', r'\1login', ruta)
 @app.route(ruta, methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username_or_email = request.form["username_or_email"].lower()
+        username_or_email = request.form["username_or_email"]
         password = request.form["password"]
         if db.check_user(username_or_email, password):
             session["username"] = username_or_email
-            return redirect(url_for("home"))
+            return redirect(url_for("pagina_principal"))
         else:
             return "Usuario o contraseña incorrectos"
     return render_template("login.html")
 
-ruta = re.sub(r'^(\/).*', r'\1admin', ruta)
+ruta = re.sub(r'^(\/).*', r'\1inicio', ruta)
+@app.route(ruta)
+def pagina_principal():
+    return render_template("pagina_principal.html")
+
+ruta = re.sub(r'^(\/inicio).*', r'\1/admin', ruta)
 @app.route(ruta)
 def admin():
     if "username" not in session:
@@ -70,17 +75,29 @@ def admin():
         abort(404)
     return render_template("admin.html")
 
-ruta = re.sub(r'^(\/admin).*', r'\1/users', ruta)
+ruta = re.sub(r'^(\/inicio/admin).*', r'\1/users', ruta)
 @app.route(ruta)
 def listar_usuarios():
     usuarios = db.cursor.execute(
         "SELECT id, username, email, password FROM users").fetchall()
     return render_template("users.html", usuarios=usuarios)
 
-ruta = re.sub(r'^(\/admin).*', r'\1/delete_users', ruta)
-@app.route(ruta)
-def eliminar_user():
-    return True
+ruta = re.sub(r'^(\/inicio/admin).*', r'\1/delete_users', ruta)
+@app.route(ruta, methods=["GET", "POST"])
+def delete_user():
+    if request.method == "POST":
+        username_or_email = request.form["username_or_email"]
+        password = request.form["password"]
+        # Lógica de eliminación
+        if db.remove_user(username_or_email, password):
+            print("El usuario se ha eliminado de la tabla de datos correctamente.")
+            return redirect(url_for("admin"))
+        else:
+            print("Usuario y contraseña no encontradas en la database.")
+            return redirect(url_for("delete_user"))
+
+    return render_template("delete_users.html")
+
 
 
 # def registrar_admin():
