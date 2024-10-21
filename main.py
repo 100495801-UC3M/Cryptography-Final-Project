@@ -1,146 +1,180 @@
 import os
 import re
+import logging
+import base64
+
+from SQL import SQL
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort)
-from SQL import SQL
-from mail import MailManager
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
 app = Flask(__name__)
 db = SQL()
-mail = MailManager(app)
 # Firmamos la sesión para que no pueda ser modificada por el cliente
 app.secret_key = os.urandom(24)
 
-ruta = "/"
-@app.route(ruta)
-def home():
+route = "/"
+@app.route(route)
+def index():
     return render_template("index.html")
 
-ruta = re.sub(r'^(\/).*', r'\1register', ruta)
-@app.route(ruta, methods=["GET", "POST"])
-def registro():
+
+route = re.sub(r'^(\/).*', r'\1register', route)
+@app.route(route, methods=["GET", "POST"])
+def register():
+    if "username" in session:
+        return redirect(url_for("home"))
     if request.method == "POST":
-        username = request.form["username"]
-        email = request.form["email"]
+        username = request.form["username"].strip()
+        email = request.form["email"].strip()
         password = request.form["password"]
-        if not verificar_password(password):
-            print("La contraseña es inválida. Debe tener un mínimo de 6 caracteres, "
-                  "una mayúscula, una minúscula, un número y un carácter especial ($!%*?&_-).", "error")
-            return render_template("register.html")  # Devolver el formulario con un mensaje de error
-        repeat_password = request.form["repeat_password"]
-        if repeat_password != password:
-            print("Las contraseñas no son la misma. Inténtalo de nuevo.")
-            return render_template("register.html")
-        db.add(username, email, password)
-        return redirect(url_for("login"))
+        password2 = request.form["password2"]
+        if not check_password(password):
+            error = ("La contraseña es inválida. Debe tener al menos 6 "
+                     "caracteres, una mayúscula, una minúscula, un número y "
+                     "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
+                     "espacios.")
+            return render_template("register.html", error=error)
+        if password != password2:
+            error = "Las contraseñas no coinciden"
+            return render_template("register.html", error=error)
+        if not re.match(r"^([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+$", email):
+            error = "Email no válido"
+            return render_template("register.html", error=error)
+        salt = generate_salt()
+        hashed_password = hash_password(password, salt)
+
+
+        # result = db.add_admin(username, email, hashed_password, "admin",
+        #                       base64.urlsafe_b64encode(salt))
+        result = db.add(username, email, hashed_password, base64.urlsafe_b64encode(salt))
+
+
+        if result:
+            return redirect(url_for("login"))
+        else:
+            error = "Usuario o email ya registrados"
+            return render_template("register.html", error=error)
     return render_template("register.html")
 
-def verificar_password(password):
-    if len(password) < 6:
-        return True
 
-        # Expresión regular para verificar las reglas
+def check_password(password):
+    if " " in password:
+        return False
+
+    if len(password) < 6:
+        return False
+
+    # Expresión regular para verificar las reglas
     if (re.search(r'[A-Z]', password) and  # Al menos una letra mayúscula
             re.search(r'[a-z]', password) and  # Al menos una letra minúscula
-            re.search(r'\d', password) and  # Al menos un número
-            re.search(r'[$!%*?&_-]',
+            re.search(r'\d', password, re.ASCII) and  # Al menos un número
+            re.search(r'[$!%*?&_¿@#=-]',
                       password)):  # Al menos un carácter especial (puedes personalizar los caracteres especiales)
         return True
     else:
         return False
 
-ruta = re.sub(r'^(\/).*', r'\1login', ruta)
-@app.route(ruta, methods=["GET", "POST"])
+
+route = re.sub(r'^(\/).*', r'\1login', route)
+@app.route(route, methods=["GET", "POST"])
 def login():
+    if "username" in session:
+        return redirect(url_for("home"))
     if request.method == "POST":
-        username_or_email = request.form["username_or_email"]
+        username_or_email = request.form["username_or_email"].lower()
         password = request.form["password"]
-        if db.check_user(username_or_email, password):
-            session["username"] = username_or_email
-            return redirect(url_for("pagina_principal"))
-        else:
-            return "Usuario o contraseña incorrectos"
+        user = db.check_user(username_or_email)
+        if user is not None:
+            stored_password = user["password"]
+            salt = base64.urlsafe_b64decode(user["salt"])
+            if verify_password(stored_password, salt, password):
+                session["username"] = username_or_email
+                return redirect(url_for('home'))
+            else:
+                error = "Usuario o contraseña incorrectos"
+                return render_template("login.html", error=error)
     return render_template("login.html")
 
-ruta = re.sub(r'^(\/).*', r'\1inicio', ruta)
-@app.route(ruta)
-def pagina_principal():
-    return render_template("pagina_principal.html")
 
-ruta = re.sub(r'^(\/inicio).*', r'\1/admin', ruta)
-@app.route(ruta)
-def admin():
+route = re.sub(r'^(\/).*', r'\1home', route)
+@app.route(route, methods=["GET", "POST"])
+def home():
+    if "username" not in session:
+        return redirect(url_for("login"))
+    else:
+        user = db.check_user(session["username"])
+        username = user["username"]
+        role = user["role"]
+        if request.method == "POST":
+            password = request.form["password"]
+            new_password = request.form["new_password"]
+            new_password2 = request.form["new_password2"]
+            user = db.check_user(username)
+            stored_password = user["password"]
+            salt = base64.urlsafe_b64decode(user["salt"])
+            if not verify_password(stored_password, salt, password):
+                error = "La contraseña no es correcta"
+                return render_template("home.html", username=username,
+                                       role=role , error=error)
+            if not check_password(new_password):
+                error = ("La contraseña es inválida. Debe tener al menos 6 "
+                         "caracteres, una mayúscula, una minúscula, un número y "
+                         "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
+                         "espacios.")
+                return render_template("home.html", username=username,
+                                       role=role, error=error)
+            if new_password != new_password2:
+                error = "Las contraseñas no coinciden"
+                return render_template("home.html", username=username,
+                                       role=role, error=error)
+            hashed_password = hash_password(new_password, salt)
+            db.update_password(username, hashed_password)
+            return render_template("home.html", username=username, role=role)
+    return render_template("home.html", username=username, role=role)
+
+
+route = re.sub(r'^(\/).*', r'\1/users', route)
+@app.route(route, methods=["GET", "POST"])
+def list_users():
     if "username" not in session:
         abort(404)
-    user = db.cursor.execute("SELECT role FROM users WHERE username=?",
-                             (session["username"],)).fetchone()
-    if not user:
-        user = db.cursor.execute("SELECT role FROM users WHERE email=?",
-                                 (session["username"],)).fetchone()
+    user = db.check_user(session["username"])
     if user["role"] != "admin":
         abort(404)
-    return render_template("admin.html")
-
-ruta = re.sub(r'^(\/inicio/admin).*', r'\1/users', ruta)
-@app.route(ruta)
-def listar_usuarios():
-    usuarios = db.cursor.execute(
-        "SELECT id, username, email, password FROM users").fetchall()
-    return render_template("users.html", usuarios=usuarios)
-
-ruta = re.sub(r'^(\/inicio/admin).*', r'\1/delete_users', ruta)
-@app.route(ruta, methods=["GET", "POST"])
-def delete_user():
     if request.method == "POST":
-        username_or_email = request.form["username_or_email"]
-        password = request.form["password"]
-        # Lógica de eliminación
-        if db.remove_user(username_or_email, password):
-            print("El usuario se ha eliminado de la tabla de datos correctamente.")
-            return redirect(url_for("admin"))
-        else:
-            print("Usuario y contraseña no encontradas en la database.")
-            return redirect(url_for("delete_user"))
-
-    return render_template("delete_users.html")
+        user_id = request.form.get("id")
+        db.remove_user(user_id)
+        logging.info("El usuario se ha eliminado de la tabla de datos "
+                     "correctamente.")
+    users = db.list_users()
+    return render_template("users.html", users=users)
 
 
-
-# def registrar_admin():
-#     username = input("Inserte el nombre de usuario para el admin:\n")
-#     email = input("Inserte el correo electrónico:\n")
-#     password = input("Inserte la contraseña:\n")
-#
-#     db.add(username, email, password, 'admin')  # Asignamos el rol 'admin'
-#     print(f"Usuario admin '{username}' registrado con éxito.")
-#
-#
-# # Llama a esta función solo una vez
-# registrar_admin()
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
 
 
-ruta = re.sub(r'^(\/).*', r'\1cambiar-contraseña', ruta)
-@app.route(ruta, methods=["GET", "POST"])
-def cambiar_contraseña_correo():
-    if request.method == "POST":
-        user = request.form("username_or_email")
-        if not db.get_email_from_user(user):
-            print("El usuario no se está registrado. Prueba de nuevo o registrate.")
-            return redirect(url_for("cambiar_contraseña_correo"))
-        else:
-            mail.send_password_change_email(user, redirect(url_for("cambiar_contraseña.html")))
-            print("El usuario ha recibido un correo asociado con su cuenta correctamente.")
-            return redirect(url_for("home"))
-    else:
-        return render_template("cambiar-contraseña.html")
-
-ruta = re.sub(r'^(\/).*', r'\1confirmar-cambio-contraseña', ruta)
-@app.route(ruta, methods = ["GET", "POST"])
-def cambiar_contraseña():
-    password = request.form
-    repeat_password = request.form
+def generate_salt():
+    return os.urandom(16)
 
 
+def hash_password(password, salt):
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,
+                     iterations=100000, backend=default_backend())
+    password_hash = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+    logging.info(f"Algoritmo: PBKDF2-HMAC-SHA256, Longitud de clave: 32 "
+                 f"bytes, Salt: {base64.urlsafe_b64encode(salt)}, "
+                 f"Contraseña_Hash: {password_hash}")
+    return password_hash
+
+def verify_password(stored_password, salt, provided_password):
+    provided_password_hash = hash_password(provided_password, salt)
+    return provided_password_hash == stored_password
 
 
 if __name__ == "__main__":
