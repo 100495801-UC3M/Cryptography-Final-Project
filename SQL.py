@@ -1,4 +1,6 @@
 import sqlite3
+import os
+import criptografia
 
 
 class SQL:
@@ -46,6 +48,15 @@ class SQL:
             return True
         else:
             return False
+
+    def get_email_from_user(self, username_or_email):
+        user = self.cursor.execute(
+            "SELECT email FROM users WHERE username=? OR email=?",
+            (username_or_email, username_or_email)).fetchone()
+        if user is None:
+            return False
+        else:
+            return user
 
     def close(self):
         self.connection.close()

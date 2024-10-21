@@ -3,9 +3,11 @@ import re
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort)
 from SQL import SQL
+from mail import MailManager
 
 app = Flask(__name__)
 db = SQL()
+mail = MailManager(app)
 # Firmamos la sesión para que no pueda ser modificada por el cliente
 app.secret_key = os.urandom(24)
 
@@ -22,9 +24,13 @@ def registro():
         email = request.form["email"]
         password = request.form["password"]
         if not verificar_password(password):
-            return("La contraseña es inválida. Debe tener un mínimo de 6 caracteres, "
+            print("La contraseña es inválida. Debe tener un mínimo de 6 caracteres, "
                   "una mayúscula, una minúscula, un número y un carácter especial ($!%*?&_-).", "error")
             return render_template("register.html")  # Devolver el formulario con un mensaje de error
+        repeat_password = request.form["repeat_password"]
+        if repeat_password != password:
+            print("Las contraseñas no son la misma. Inténtalo de nuevo.")
+            return render_template("register.html")
         db.add(username, email, password)
         return redirect(url_for("login"))
     return render_template("register.html")
@@ -111,6 +117,30 @@ def delete_user():
 #
 # # Llama a esta función solo una vez
 # registrar_admin()
+
+
+ruta = re.sub(r'^(\/).*', r'\1cambiar-contraseña', ruta)
+@app.route(ruta, methods=["GET", "POST"])
+def cambiar_contraseña_correo():
+    if request.method == "POST":
+        user = request.form("username_or_email")
+        if not db.get_email_from_user(user):
+            print("El usuario no se está registrado. Prueba de nuevo o registrate.")
+            return redirect(url_for("cambiar_contraseña_correo"))
+        else:
+            mail.send_password_change_email(user, redirect(url_for("cambiar_contraseña.html")))
+            print("El usuario ha recibido un correo asociado con su cuenta correctamente.")
+            return redirect(url_for("home"))
+    else:
+        return render_template("cambiar-contraseña.html")
+
+ruta = re.sub(r'^(\/).*', r'\1confirmar-cambio-contraseña', ruta)
+@app.route(ruta, methods = ["GET", "POST"])
+def cambiar_contraseña():
+    password = request.form
+    repeat_password = request.form
+
+
 
 
 if __name__ == "__main__":
