@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es-es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenid@</title>
+    <link rel="stylesheet" href="../static/styles.css">
+</head>
+<body>
+    <p>Bienvenid@ {{ username }}</p>
+    {% if role == "admin" %}
+        <a href="/users">Usuarios</a>
+        <br><br><br>
+    {% endif %}
+    <form action="/logout" method="POST">
+        <button type="submit" id="logout">Cerrar sesión</button>
+    </form>
+    <form method="POST">
+        <label for="password">Contraseña Actual:</label>
+        <input type="password" id="password" name="password" required><br>
+        <label for="new_password">Contraseña Nueva:</label>
+        <input type="password" id="new_password" name="new_password" required><br>
+        <label for="new_password2">Confirme la nuva contraseña:</label>
+        <input type="password" id="new_password2" name="new_password2"
+               required><br>
+
+        <!-- Mensaje de error si hay -->
+        {% if error %}
+            <p style="color:red;">{{ error }}</p>
+        {% endif %}
+
+        <button type="submit">Cambiar Contraseña</button>
+    </form>
+</body>
+</html>

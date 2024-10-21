@@ -9,43 +9,67 @@ class SQL:
         self.create_table()
 
     def create_table(self):
-        # Crea la tabla de usuarios si no existe
+        # Crea la tabla de users si no existe
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                email TEXT NOT NULL,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
-                role TEXT DEFAULT "user"
+                role TEXT DEFAULT "client",
+                salt TEXT NOT NULL
             )
         ''')
         self.connection.commit()
 
-    def add(self, username, email, password):
+    # def add_admin(self, username, email, password, role, salt):
+    #     # Añadir nuevo usuario a la base de datos
+    #     username, email = username.lower(), email.lower()
+    #     try:
+    #         self.cursor.execute(
+    #             "INSERT INTO users (username, email, password, role, salt) "
+    #             "VALUES "
+    #             "(?, ?, ?, ?, ?)",
+    #             (username, email, password, role, salt))
+    #         self.connection.commit()
+    #         return True
+    #     except sqlite3.IntegrityError:
+    #         return False
+
+    def add(self, username, email, password, salt):
         # Añadir nuevo usuario a la base de datos
         username, email = username.lower(), email.lower()
-        self.cursor.execute(
-            "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-            (username, email, password))
-        self.connection.commit()
+        try:
+            self.cursor.execute(
+                "INSERT INTO users (username, email, password, salt) VALUES "
+                "(?, ?, ?, ?)",
+                (username, email, password, salt))
+            self.connection.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
-    def check_user(self, username_or_email, password):
+    def check_user(self, username_or_email):
         # Buscar usuario por nombre de usuario o email
         user = self.cursor.execute(
             "SELECT * FROM users WHERE username=? OR email=?",
             (username_or_email, username_or_email)).fetchone()
-        if user:
-            stored_password = user["password"]
-            if stored_password == password:
-                return True
-        return False
-    def remove_user(self, username_or_email, password):
-        self.cursor.execute("DELETE FROM users WHERE (username = ? OR email = ?) AND password = ?",
-                                   (username_or_email, username_or_email, password)).fetchone()
-        if self.cursor.rowcount > 0:
-            return True
-        else:
-            return False
+        return user
+
+    def list_users(self):
+        return self.cursor.execute("SELECT * FROM users").fetchall()
+
+    def update_password(self, username, password):
+        self.cursor.execute("UPDATE users SET password=? WHERE "
+                            "username=?",   (password, username))
+
+        self.connection.commit()
+
+    def remove_user(self, user_id):
+        self.cursor.execute(
+            "DELETE FROM users WHERE id=?", user_id)
+
+        self.connection.commit()
 
     def close(self):
         self.connection.close()
