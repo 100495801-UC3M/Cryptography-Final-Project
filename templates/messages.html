@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mensajería</title>
+    <link rel="stylesheet" href="../static/styles.css"> <!-- Referencia al archivo CSS -->
+    <script src="../static/scripts.js"></script>
+</head>
+<body>
+    <!-- Menú de las últimas conversaciones -->
+    <div class="sidebar">
+        <h2>Últimas Conversaciones</h2>
+        <div class="conversation-list">
+            <!-- Las conversaciones se cargarán dinámicamente -->
+            {% for conversation in conversations %}
+                <a href="#" onclick="openConversation('{{ conversation.user_id }}')">
+                    {{ conversation.username }}
+                </a>
+            {% endfor %}
+        </div>
+        <div id="conversationDetail" style="display:none;">
+            <h3>Conversación con <span id="conversationUser"></span></h3>
+            <div id="conversationMessages">
+                <!-- Los mensajes se cargarán aquí -->
+            </div>
+            <button onclick="closeConversation()">Volver a las conversaciones</button>
+        </div>
+    </div>
+
+    <!-- Sección para enviar mensajes -->
+    <div class="main-content">
+        <h2>Enviar mensaje</h2>
+        <form action="/home/messages" method="POST">
+            <label for="recipient">Destinatario:</label>
+            <input type="text" id="recipient" name="recipient" required><br><br>
+
+            <label for="message">Mensaje:</label><br>
+            <textarea id="message" name="message" required></textarea><br><br>
+
+            <button type="submit">Enviar mensaje</button>
+        </form>
+    </div>
+
+</body>
+</html>

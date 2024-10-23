@@ -9,27 +9,17 @@
 <body>
     <p>Bienvenid@ {{ username }}</p>
     {% if role == "admin" %}
-        <a href="/users">Usuarios</a>
-        <br><br><br>
+        <a href="/home/users">Usuarios</a>
     {% endif %}
+    <a href ="/home/messages"> Mensajes </a><br><br><br>
+    <a href="/home/change-password">¿Quiere cambiar tu contraseña?</a><br><br><br>
     <form action="/logout" method="POST">
         <button type="submit" id="logout">Cerrar sesión</button>
     </form>
-    <form method="POST">
-        <label for="password">Contraseña Actual:</label>
-        <input type="password" id="password" name="password" required><br>
-        <label for="new_password">Contraseña Nueva:</label>
-        <input type="password" id="new_password" name="new_password" required><br>
-        <label for="new_password2">Confirme la nuva contraseña:</label>
-        <input type="password" id="new_password2" name="new_password2"
-               required><br>
-
-        <!-- Mensaje de error si hay -->
-        {% if error %}
-            <p style="color:red;">{{ error }}</p>
-        {% endif %}
-
-        <button type="submit">Cambiar Contraseña</button>
+    <!--
+    <form action="/home/change-password" method="POST">
+        <button type="submit">¿Quiere cambiar tu contraseña?</button>
     </form>
+    -->
 </body>
 </html>
