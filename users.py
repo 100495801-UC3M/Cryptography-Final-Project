@@ -1,7 +1,7 @@
 import sqlite3
 
 
-class SQL:
+class Users:
     def __init__(self, db_name="users.db"):
         self.connection = sqlite3.connect(db_name, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
@@ -17,9 +17,7 @@ class SQL:
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
                 role TEXT DEFAULT "client",
-                salt TEXT NOT NULL
-            )
-        ''')
+                salt TEXT NOT NULL)''')
         self.connection.commit()
 
     # def add_admin(self, username, email, password, role, salt):
@@ -54,7 +52,18 @@ class SQL:
         user = self.cursor.execute(
             "SELECT * FROM users WHERE username=? OR email=?",
             (username_or_email, username_or_email)).fetchone()
+        if user is None:
+            return False
         return user
+
+    def get_email_from_user(self, username_or_email):
+        user = self.cursor.execute(
+            "SELECT email FROM users WHERE username=? OR email=?",
+            (username_or_email, username_or_email)).fetchone()
+        if user is None:
+            return False
+        else:
+            return user
 
     def list_users(self):
         return self.cursor.execute("SELECT * FROM users").fetchall()
