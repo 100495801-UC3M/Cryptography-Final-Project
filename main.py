@@ -108,8 +108,6 @@ def home():
     username = user["username"]
     role = user["role"]
     
-    # Inicializa las variables que usarás
-    found = False
     
     # Manejo de formularios
     if request.method == "POST":
@@ -117,13 +115,17 @@ def home():
             user_searched_input = request.form["user_searched"]
             user_searched_data = users_db.check_user(user_searched_input)
             if user_searched_data:
-                found = True
+                session['found'] = True
                 session['user_searched'] = user_searched_data["username"]  # Guardar en sesión
                 session["conversations"] = messages_db.conversations(username, session['user_searched'])
             else:
+                session['found'] = False
                 error = "Usuario no encontrado"
                 return render_template("home.html", role=role, error=error)
-        
+            
+            # Redirige para evitar el reenvío del formulario
+            return redirect(url_for('home'))
+
         elif "send_message" in request.form:
             message = request.form["message"]
             user_searched = session.get('user_searched')  # Obtener de la sesión
@@ -131,22 +133,21 @@ def home():
                 if messages_db.send_message(username, user_searched, message):
                     # Vuelve a cargar las conversaciones después de enviar el mensaje
                     session["conversations"] = messages_db.conversations(username, user_searched)
-                    found = True  # Asegúrate de que found sigue siendo True después de enviar el mensaje
                 else:
                     error = "Error al enviar el mensaje"
                     return render_template("home.html", role=role, error=error)
             else:
                 error = "No hay un usuario buscado para enviar el mensaje"
                 return render_template("home.html", role=role, error=error)
+            
+            # Redirige para evitar el reenvío del formulario
+            return redirect(url_for('home'))
 
-    # Renderiza la plantilla, asegurándote de pasar las variables correctas
-    user_searched = session.get("user_searched")  # Obtener de la sesión
+    username = session.get("username")
+    user_searched = session.get("user_searched")
     conversations = session.get("conversations")
-    if conversations is None:
-        print("aqui")
-    else:
-        print(conversations)
-    return render_template("home.html", role=role, conversations=conversations, found=found, user_searched=user_searched)
+    found = session.get("found")
+    return render_template("home.html", username=username, role=role, conversations=conversations, found=found, user_searched=user_searched)
 
 
 route = re.sub(r'^(\/).*', r'\1users', route)
@@ -172,12 +173,35 @@ def profile():
     if "username" not in session:
         return redirect(url_for("login"))
     else:
-        if request.method == "POST":
-            return redirect(url_for("change-password.html"))
         user = users_db.check_user(session["username"])
         username = user["username"]
         role = user["role"]
-    return render_template("profile.html", username=username, role=role)
+
+        if request.method == "POST":
+            password = request.form["password"]
+            new_password = request.form["new_password"]
+            new_password2 = request.form["new_password2"]
+            stored_password = user["password"]
+            salt = base64.urlsafe_b64decode(user["salt"])
+            if not verify_password(stored_password, salt, password):
+                error = "La contraseña no es correcta"
+                return render_template("profile.html", username=username, role=role, error=error)
+            if not check_password(new_password):
+                error = ("La contraseña es inválida. Debe tener al menos 6 "
+                        "caracteres, una mayúscula, una minúscula, un número y "
+                        "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
+                        "espacios.")
+                return render_template("perfil.html", username=username,
+                                    role=role, error=error)
+            if new_password != new_password2:
+                error = "Las contraseñas no coinciden"
+                return render_template("profile.html", username=username,
+                                    role=role, error=error)
+            hashed_password = codes_db.hash_code(new_password, salt)
+            users_db.update_password(username, hashed_password)
+            success = "Las contraseña ha sido actualizada correctamente"
+            return render_template("profile.html", username=username, role=role, success=success)
+        return render_template("profile.html", username=username, role=role)
 
 
 route = re.sub(r'^(\/).*', r'\1/logout', route)
@@ -206,40 +230,6 @@ def check_password(password):
         return True
     else:
         return False
-    
-
-# No se si esta función es necesaria o no, lo marco con un comentario para que lo borres en tu proximo commit si eso
-def change_password():
-    user = users_db.check_user(session["username"])
-    username = user["username"]
-    role = user["role"]
-    if request.method == "POST":
-        password = request.form["password"]
-        new_password = request.form["new_password"]
-        new_password2 = request.form["new_password2"]
-        user = users_db.check_user(username)
-        stored_password = user["password"]
-        salt = base64.urlsafe_b64decode(user["salt"])
-        if not verify_password(stored_password, salt, password):
-            error = "La contraseña no es correcta"
-            return render_template("change-password.html", username=username,
-                                   role=role, error=error)
-        if not check_password(new_password):
-            error = ("La contraseña es inválida. Debe tener al menos 6 "
-                     "caracteres, una mayúscula, una minúscula, un número y "
-                     "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
-                     "espacios.")
-            return render_template("change-password.html", username=username,
-                                   role=role, error=error)
-        if new_password != new_password2:
-            error = "Las contraseñas no coinciden"
-            return render_template("change-password.html", username=username,
-                                   role=role, error=error)
-        hashed_password = codes_db.hash_code(new_password, salt)
-        users_db.update_password(username, hashed_password)
-        return render_template("home.html", username=username, role=role)
-    else:
-        return render_template("change-password.html")
 
 
 def verify_password(stored_password, salt, provided_password):

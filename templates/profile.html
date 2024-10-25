@@ -18,6 +18,9 @@
         {% if error %}
             <p style="color:red;">{{ error }}</p>
         {% endif %}
+        {% if success %}
+            <p style="color:rgb(14, 170, 0);">{{ success }}</p>
+        {% endif %}
         <button type="submit">Cambiar contraseña</button>
         <br><br><br>
         <a href="/home">Volver</a>

@@ -31,9 +31,15 @@
         {% if found %}
             <h4>Conversación con: {{ user_searched }}</h4>
             {% for message in conversations %}
-                <div>
-                    <li>{{ message["text"] }} - {{ message["datehour"] }}</li>
-                </div>
+                {% if username == message["sender"] %}
+                    <div class="message-container" id="sender">
+                        <p style="text-align: right;">{{ message["text"] }} - {{ message["datehour"] }}</p>
+                    </div>
+                {% else %}
+                    <div class="message-container" id="receiver">
+                        <p>{{ message["text"] }} - {{ message["datehour"] }}</p>
+                    </div>
+                {% endif %}
             {% endfor %}
             <form method="POST">
                 <input type="text" id="message" name="message" required>
