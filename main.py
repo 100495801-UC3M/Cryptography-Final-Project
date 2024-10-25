@@ -1,20 +1,20 @@
 import os
 import re
-import logging
 import base64
+import logging
+from datetime import datetime, timedelta
 from mail import MailManager
 from users import Users
 from messages import Messages
+from codes import Codes
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort)
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
 
 app = Flask(__name__)
+codes_db = Codes()
 users_db = Users()
 messages_db = Messages()
-mail = MailManager("admin@gmail.com")
+mail = MailManager("admin@gmail.com", codes_db)
 # Firmamos la sesión para que no pueda ser modificada por el cliente
 app.secret_key = os.urandom(24)
 
@@ -43,8 +43,8 @@ def register():
         if password != password2:
             error = "Las contraseñas no coinciden"
             return render_template("register.html", error=error)
-        salt = generate_salt()
-        hashed_password = hash_password(password, salt)
+        salt = codes_db.generate_salt()
+        hashed_password = codes_db.hash_code(password, salt)
 
 
         # result = users_db.add_admin(username, email, hashed_password, "admin",
@@ -65,22 +65,37 @@ route = re.sub(r'^(\/).*', r'\1login', route)
 def login():
     if "username" in session:
         return redirect(url_for("home"))
-    if request.method == "POST" and request.path == "/home/change-password-email":
-        return redirect(url_for("change_password_email"))
-    elif request.method == "POST":
-        username_or_email = request.form["username_or_email"].lower()
-        password = request.form["password"]
-        user = users_db.check_user(username_or_email)
-        if user is not None:
-            stored_password = user["password"]
-            salt = base64.urlsafe_b64decode(user["salt"])
-            if verify_password(stored_password, salt, password):
-                session["username"] = username_or_email
-                return redirect(url_for('home'))
-            else:
-                error = "Usuario o contraseña incorrectos"
-                return render_template("login.html", error=error)
-    return render_template("login.html")
+    if request.method == "POST":
+        if request.form.get("form_id") == "loginForm":
+            username_or_email = request.form["username_or_email"].lower()
+            password = request.form["password"]
+            user = users_db.check_user(username_or_email)
+            if user is not None:
+                stored_password = user["password"]
+                salt = base64.urlsafe_b64decode(user["salt"])
+                if verify_password(stored_password, salt, password):
+                    session["username"] = username_or_email
+                    return redirect(url_for('home'))
+                else:
+                    error = "Usuario o contraseña incorrectos"
+                    return render_template("login.html", error=error)
+        else:
+            email = request.form["email"]
+            code_id = mail.send_password_change_email(email)
+            expiration_date = datetime.now() + timedelta(minutes=5)
+            while datetime.now() <= expiration_date:
+                code = request.form["code"]
+                if codes_db.compare_code_from_id(code, code_id):
+                    """Implementar función para cambiar contraseña"""
+                    return redirect(url_for("login"))
+            codes_db.remove_from_id(code_id)
+            return redirect(url_for("login"))
+
+
+
+
+    else:
+        return render_template("login.html")
 
 
 route = re.sub(r'^(\/).*', r'\1home', route)
@@ -193,6 +208,7 @@ def check_password(password):
         return False
     
 
+# No se si esta función es necesaria o no, lo marco con un comentario para que lo borres en tu proximo commit si eso
 def change_password():
     user = users_db.check_user(session["username"])
     username = user["username"]
@@ -219,28 +235,15 @@ def change_password():
             error = "Las contraseñas no coinciden"
             return render_template("change-password.html", username=username,
                                    role=role, error=error)
-        hashed_password = hash_password(new_password, salt)
+        hashed_password = codes_db.hash_code(new_password, salt)
         users_db.update_password(username, hashed_password)
         return render_template("home.html", username=username, role=role)
     else:
         return render_template("change-password.html")
 
 
-def generate_salt():
-    return os.urandom(16)
-
-
-def hash_password(password, salt):
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,
-                     iterations=100000, backend=default_backend())
-    password_hash = base64.urlsafe_b64encode(kdf.derive(password.encode()))
-    logging.info(f"Algoritmo: PBKDF2-HMAC-SHA256, Longitud de clave: 32 "
-                 f"bytes, Salt: {base64.urlsafe_b64encode(salt)}, "
-                 f"Contraseña_Hash: {password_hash}")
-    return password_hash
-
 def verify_password(stored_password, salt, provided_password):
-    provided_password_hash = hash_password(provided_password, salt)
+    provided_password_hash = codes_db.hash_code(provided_password, salt)
     return provided_password_hash == stored_password
 
 
