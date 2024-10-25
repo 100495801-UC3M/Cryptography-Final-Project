@@ -4,22 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bienvenid@</title>
-    <link rel="stylesheet" href="../static/styles.css">
+    <link rel="stylesheet" href="../static/css/styles.css">
+    <link rel="stylesheet" href="../static/css/interface.css">
+    <script src="../static/js/scripts.js"></script>
 </head>
 <body>
-    <p>Bienvenid@ {{ username }}</p>
-    {% if role == "admin" %}
-        <a href="/home/users">Usuarios</a>
-    {% endif %}
-    <a href ="/home/messages"> Mensajes </a><br><br><br>
-    <a href="/home/change-password">¿Quiere cambiar tu contraseña?</a><br><br><br>
-    <form action="/logout" method="POST">
-        <button type="submit" id="logout">Cerrar sesión</button>
-    </form>
-    <!--
-    <form action="/home/change-password" method="POST">
-        <button type="submit">¿Quiere cambiar tu contraseña?</button>
-    </form>
-    -->
+    <div class="top">
+        {% if role == "admin" %}
+            <button type="button" onclick="redirect('/users')">Usuarios</button>
+        {% endif %}
+        <button type="button" onclick="redirect('/profile')">Perfil</button>
+        <form action="/logout" method="POST">
+            <button type="submit" id="logout">Cerrar sesión</button>
+        </form>
+        <form method="POST">
+            <input type="text" id="user_searched" name="user_searched" required>
+            <button type="submit" name="search_form">Buscar</button>
+        </form>
+        <!-- Mensaje de error si hay -->
+        {% if error %}
+        <p style="color:red;">{{ error }}</p>
+        {% endif %}
+    </div>
+    <div class="messages">
+        <br><hr>
+        {% if found %}
+            <h4>Conversación con: {{ user_searched }}</h4>
+            {% for message in conversations %}
+                <div>
+                    <li>{{ message["text"] }} - {{ message["datehour"] }}</li>
+                </div>
+            {% endfor %}
+            <form method="POST">
+                <input type="text" id="message" name="message" required>
+                <button type="submit" name="send_message">Enviar</button>
+            </form>
+        {% else %}
+            <p>No hay mensajes disponibles. Busca un usuario.</p>
+        {% endif %}
+    </div>
 </body>
 </html>

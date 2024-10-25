@@ -1,0 +1,74 @@
+* { 
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: white;
+    text-align: center;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button {
+    min-width: 125px;
+    padding: 15px;
+    color: white;
+    background-color: red;
+    border: 1px solid white;
+    border-radius: 10px;
+}
+
+button:hover {
+    color: red;
+    background-color: white;
+    border: 1px solid red;
+}
+
+a {
+    text-decoration: none;
+    color: red;
+}
+
+form {
+    padding: 10px;
+}
+
+label, input {
+    margin: 10px;
+}
+
+input:focus {
+    border: 1px solid red;
+}
+
+.emailPopUp {
+    display:none;
+    max-height: 100%;
+    text-align: center;
+    border-radius: 5px;
+    border: 2px solid red;
+    background-color: white;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    z-index: 1000;
+    padding: 10px;
+}
+
+.scrollable {
+    overflow-y: scroll;
+}
+
+.popup form input, .popup form select{
+    width: 100%;
+}
+
+#change_password, #change {
+    display: none;
+}

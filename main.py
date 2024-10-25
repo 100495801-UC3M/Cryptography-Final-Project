@@ -60,24 +60,6 @@ def register():
     return render_template("register.html")
 
 
-def check_password(password):
-    if " " in password:
-        return False
-
-    if len(password) < 6:
-        return False
-
-    # Expresión regular para verificar las reglas
-    if (re.search(r'[A-Z]', password) and  # Al menos una letra mayúscula
-            re.search(r'[a-z]', password) and  # Al menos una letra minúscula
-            re.search(r'\d', password, re.ASCII) and  # Al menos un número
-            re.search(r'[$!%*?&_¿@#=-]',
-                      password)):  # Al menos un carácter especial (puedes personalizar los caracteres especiales)
-        return True
-    else:
-        return False
-
-
 route = re.sub(r'^(\/).*', r'\1login', route)
 @app.route(route, methods=["GET", "POST"])
 def login():
@@ -100,42 +82,59 @@ def login():
                 return render_template("login.html", error=error)
     return render_template("login.html")
 
-route = re.sub(r'^(\/).*', r'\1change-password-email', route)
-@app.route(route, methods=["GET", "POST"])
-def change_password_email():
-    if request.method == "POST":
-        # Aquí debemos verificar si el formulario se envía correctamente
-        username_or_email = request.form.get("username_or_email")
-        if username_or_email is None:
-            error = "El campo 'Nombre de Usuario o Email' es obligatorio."
-            return render_template("change-password-email.html", error=error)
-
-        # Convertir a minúsculas solo si no es None
-        username_or_email = username_or_email.lower()
-        username_or_email = users_db.get_email_from_user(username_or_email)
-        if username_or_email == False:
-            error = ("El usuario o correo no está registrado en la página web")
-            return render_template("change-password-email.html", error=error)
-        else:
-            mail.send_password_change_email(username_or_email, url_for("change-password.html"))
-    else:
-        return render_template("change-password-email.html")
 
 route = re.sub(r'^(\/).*', r'\1home', route)
 @app.route(route, methods=["GET", "POST"])
 def home():
     if "username" not in session:
         return redirect(url_for("login"))
+    
+    user = users_db.check_user(session["username"])
+    username = user["username"]
+    role = user["role"]
+    
+    # Inicializa las variables que usarás
+    found = False
+    
+    # Manejo de formularios
+    if request.method == "POST":
+        if "search_form" in request.form:
+            user_searched_input = request.form["user_searched"]
+            user_searched_data = users_db.check_user(user_searched_input)
+            if user_searched_data:
+                found = True
+                session['user_searched'] = user_searched_data["username"]  # Guardar en sesión
+                session["conversations"] = messages_db.conversations(username, session['user_searched'])
+            else:
+                error = "Usuario no encontrado"
+                return render_template("home.html", role=role, error=error)
+        
+        elif "send_message" in request.form:
+            message = request.form["message"]
+            user_searched = session.get('user_searched')  # Obtener de la sesión
+            if user_searched:  # Verifica que user_searched no sea None
+                if messages_db.send_message(username, user_searched, message):
+                    # Vuelve a cargar las conversaciones después de enviar el mensaje
+                    session["conversations"] = messages_db.conversations(username, user_searched)
+                    found = True  # Asegúrate de que found sigue siendo True después de enviar el mensaje
+                else:
+                    error = "Error al enviar el mensaje"
+                    return render_template("home.html", role=role, error=error)
+            else:
+                error = "No hay un usuario buscado para enviar el mensaje"
+                return render_template("home.html", role=role, error=error)
+
+    # Renderiza la plantilla, asegurándote de pasar las variables correctas
+    user_searched = session.get("user_searched")  # Obtener de la sesión
+    conversations = session.get("conversations")
+    if conversations is None:
+        print("aqui")
     else:
-        if request.method == "POST" and request.path == "/home/change-password":
-            return redirect(url_for("change-password.html"))
-        user = users_db.check_user(session["username"])
-        username = user["username"]
-        role = user["role"]
-    return render_template("home.html", username=username, role=role)
+        print(conversations)
+    return render_template("home.html", role=role, conversations=conversations, found=found, user_searched=user_searched)
 
 
-route = re.sub(r'^(\/home).*', r'\1/users', route)
+route = re.sub(r'^(\/).*', r'\1users', route)
 @app.route(route, methods=["GET", "POST"])
 def list_users():
     if "username" not in session:
@@ -152,8 +151,48 @@ def list_users():
     return render_template("users.html", users=users)
 
 
-route = re.sub(r'^(\/home).*', r'\1/change-password', route)
+route = re.sub(r'^(\/).*', r'\1/profile', route)
 @app.route(route, methods=["GET", "POST"])
+def profile():
+    if "username" not in session:
+        return redirect(url_for("login"))
+    else:
+        if request.method == "POST":
+            return redirect(url_for("change-password.html"))
+        user = users_db.check_user(session["username"])
+        username = user["username"]
+        role = user["role"]
+    return render_template("profile.html", username=username, role=role)
+
+
+route = re.sub(r'^(\/).*', r'\1/logout', route)
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    if request.method == "GET":
+        abort(404)
+    else:
+        session.clear()
+        return redirect(url_for("index"))
+
+
+
+def check_password(password):
+    if " " in password:
+        return False
+
+    if len(password) < 6:
+        return False
+
+    # Expresión regular para verificar las reglas
+    if (re.search(r'[A-Z]', password) and  # Al menos una letra mayúscula
+            re.search(r'[a-z]', password) and  # Al menos una letra minúscula
+            re.search(r'\d', password, re.ASCII) and  # Al menos un número
+            re.search(r'[$!%*?&_¿@#=-]', password)):  # Al menos un carácter especial (puedes personalizar los caracteres especiales)
+        return True
+    else:
+        return False
+    
+
 def change_password():
     user = users_db.check_user(session["username"])
     username = user["username"]
@@ -185,36 +224,6 @@ def change_password():
         return render_template("home.html", username=username, role=role)
     else:
         return render_template("change-password.html")
-
-route = re.sub(r'^(\/home).*', r'\1/messages', route)
-@app.route(route, methods=["GET", "POST"])
-def send_message():
-    # Si es un POST, procesamos el envío de mensajes
-    if request.method == 'POST':
-        sender = session.get('username')
-        recipient = request.form.get('recipient')
-        content = request.form.get('message')
-
-        # Guardar el mensaje en la base de datos
-        messages_db.send_message(sender, recipient, content)
-        return redirect(url_for("send_message"))
-
-    # Si es un GET, mostramos las últimas conversaciones
-    # Aquí se pueden cargar las últimas conversaciones
-    username = session.get('username')
-    conversations = get_last_conversations(username)
-    return render_template('messages.html', conversations=conversations)
-
-def get_last_conversations(username):
-    return messages_db.conversations(username)
-
-
-
-route = re.sub(r'^(\/).*', r'\1/logout', route)
-@app.route("/logout", methods=["POST"])
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
 
 
 def generate_salt():

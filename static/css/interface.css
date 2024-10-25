@@ -1,0 +1,38 @@
+body {
+    margin: 20px;
+    display: block;
+    text-align: start;
+}
+
+.top {
+    display: flex;
+    flex-direction: row;
+}
+
+.user {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+ul, li {
+    list-style-type: none;
+}
+
+#delete {
+    padding: 2px 0;
+}
+
+#delete:hover {
+    background-color: red;
+}
+
+img {
+    width: 16px; 
+    height: 16px;
+}
+
+
+.messages {
+    display: block;
+}

@@ -4,24 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lista de Usuarios</title>
-    <link rel="stylesheet" href="../static/styles.css">
+    <link rel="stylesheet" href="../static/css/styles.css">
+    <link rel="stylesheet" href="../static/css/interface.css">
+    <script src="../static/js/scripts.js"></script>
 </head>
 <body>
-    <a href="/home">Volver</a>
+    <button type="button" onclick="redirect('/home')">Menú Principal</button>
     <br><br><br>
     <h1>Lista de Usuarios Registrados</h1>
     <ul>
         {% for user in users %}
-            <li>id: {{user["id"]}} - Usuario: {{ user["username"] }} -
-                Email: {{user["email"]}} -
-                Contraseña: {{user["password"]}} - Rol: {{ user["role"] }}
-            </li>
-            {%  if user["role"] != "admin" %}
-                <form method="POST" style="display: inline;">
-                    <input type="hidden" name="id" value="{{ user["id"] }}">
-                    <button type="submit">Eliminar</button>
-                </form>
-            {% endif %}
+            <div class="user">
+                <li>id: {{user["id"]}} - Usuario: {{ user["username"] }} -
+                    Email: {{user["email"]}} -
+                    Contraseña: {{user["password"]}} - Rol: {{ user["role"] }}
+                </li>
+                {%  if user["role"] != "admin" %}
+                    <form method="POST">
+                        <input type="hidden" name="id" value="{{ user["id"] }}">
+                        <button type="submit" id="delete">
+                            <img src="/static/images/papelera.png" alt="Eliminar">
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
             <hr>
         {% endfor %}
     </ul>
