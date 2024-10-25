@@ -91,9 +91,6 @@ def login():
             codes_db.remove_from_id(code_id)
             return redirect(url_for("login"))
 
-
-
-
     else:
         return render_template("login.html")
 
@@ -108,30 +105,27 @@ def home():
     username = user["username"]
     role = user["role"]
     
-    
-    # Manejo de formularios
+
     if request.method == "POST":
         if "search_form" in request.form:
             user_searched_input = request.form["user_searched"]
             user_searched_data = users_db.check_user(user_searched_input)
             if user_searched_data:
                 session['found'] = True
-                session['user_searched'] = user_searched_data["username"]  # Guardar en sesión
+                session['user_searched'] = user_searched_data["username"]
                 session["conversations"] = messages_db.conversations(username, session['user_searched'])
             else:
                 session['found'] = False
                 error = "Usuario no encontrado"
                 return render_template("home.html", role=role, error=error)
             
-            # Redirige para evitar el reenvío del formulario
-            return redirect(url_for('home'))
+            return redirect(url_for("home"))
 
         elif "send_message" in request.form:
             message = request.form["message"]
-            user_searched = session.get('user_searched')  # Obtener de la sesión
-            if user_searched:  # Verifica que user_searched no sea None
+            user_searched = session.get("user_searched")
+            if user_searched:
                 if messages_db.send_message(username, user_searched, message):
-                    # Vuelve a cargar las conversaciones después de enviar el mensaje
                     session["conversations"] = messages_db.conversations(username, user_searched)
                 else:
                     error = "Error al enviar el mensaje"
@@ -140,13 +134,14 @@ def home():
                 error = "No hay un usuario buscado para enviar el mensaje"
                 return render_template("home.html", role=role, error=error)
             
-            # Redirige para evitar el reenvío del formulario
-            return redirect(url_for('home'))
+            return redirect(url_for("home"))
 
-    username = session.get("username")
+    username = user["username"]
     user_searched = session.get("user_searched")
     conversations = session.get("conversations")
     found = session.get("found")
+    print(username)
+    print(user_searched)
     return render_template("home.html", username=username, role=role, conversations=conversations, found=found, user_searched=user_searched)
 
 
@@ -222,7 +217,6 @@ def check_password(password):
     if len(password) < 6:
         return False
 
-    # Expresión regular para verificar las reglas
     if (re.search(r'[A-Z]', password) and  # Al menos una letra mayúscula
             re.search(r'[a-z]', password) and  # Al menos una letra minúscula
             re.search(r'\d', password, re.ASCII) and  # Al menos un número
