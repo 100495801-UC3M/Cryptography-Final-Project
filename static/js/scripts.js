@@ -32,7 +32,6 @@ function closePopUp() {
 }
 
 function sendEmail() {
-    const change_password = document.getElementById("change_password")
-
-    change_password.style.display = "block";
+    const code = document.getElementById("change_password")
+    code.style.display = "block";
 }

@@ -2,6 +2,7 @@ import os
 import re
 import base64
 import logging
+from config import Config
 from datetime import datetime, timedelta
 from mail import MailManager
 from users import Users
@@ -10,14 +11,15 @@ from codes import Codes
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort)
 
+
 app = Flask(__name__)
 codes_db = Codes()
-users_db = Users()
+users_db = Users(codes_db=codes_db)
 messages_db = Messages()
-mail = MailManager("admin@gmail.com", codes_db)
+app.config.from_object(Config)
+mail = MailManager(from_addr=Config.MAIL_DEFAULT_SENDER, codes_db=codes_db, config=app.config)
 # Firmamos la sesión para que no pueda ser modificada por el cliente
 app.secret_key = os.urandom(24)
-
 route = "/"
 @app.route(route)
 def index():
@@ -70,7 +72,7 @@ def login():
             username_or_email = request.form["username_or_email"].lower()
             password = request.form["password"]
             user = users_db.check_user(username_or_email)
-            if user is not None:
+            if user is not False:
                 stored_password = user["password"]
                 salt = base64.urlsafe_b64decode(user["salt"])
                 if verify_password(stored_password, salt, password):
@@ -79,21 +81,51 @@ def login():
                 else:
                     error = "Usuario o contraseña incorrectos"
                     return render_template("login.html", error=error)
-        else:
-            email = request.form["email"]
-            code_id = mail.send_password_change_email(email)
-            expiration_date = datetime.now() + timedelta(minutes=5)
-            while datetime.now() <= expiration_date:
-                code = request.form["code"]
-                if codes_db.compare_code_from_id(code, code_id):
-                    """Implementar función para cambiar contraseña"""
-                    return redirect(url_for("login"))
-            codes_db.remove_from_id(code_id)
-            return redirect(url_for("login"))
-
+            else:
+                error = "Usuario o email no registrado. Inténtelo de nuevo."
+                return render_template("login.html", error=error)
     else:
         return render_template("login.html")
 
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    if request.method == "POST":
+        print("puta")
+        email = request.form.get('email')  # Obtener el email directamente
+        print(email)  # Imprimir el correo para depuración
+        if email:  # Verificar si se obtuvo un email
+            code_id = mail.send_password_change_email([email])  # Asegúrate de pasar una lista
+            expiration_date = datetime.now() + timedelta(minutes=5)
+            return redirect(url_for('verification_code', code_id=code_id, expiration_date=expiration_date, email=email))
+        else:
+            print("No se recibió ningún correo electrónico.")
+            return redirect(url_for('login', error="Correo electrónico no válido."))  # Manejar el error
+
+@app.route('/verification_code', methods=["POST"])
+def verification_code(code_id, expiration_date, email):
+    code = request.form["code"]
+    while datetime.now() < expiration_date:
+        if codes_db.compare_code_from_id(code, code_id):
+            return redirect(url_for("change_password", email=email))
+    codes_db.remove_from_id(code_id)
+    return redirect(url_for("login"))
+
+@app.route("/change_password", methods=["POST"])
+def change_password(email):
+    if request.method == "POST":
+        new_password = request.form["new_password"]
+        new_password2 = request.form["new_password2"]
+        if not check_password(new_password):
+            error = ("La contraseña es inválida. Debe tener al menos 6 "
+                     "caracteres, una mayúscula, una minúscula, un número y "
+                     "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
+                     "espacios.")
+            return redirect(url_for("change_password", email=email, error=error))
+        if new_password != new_password2:
+            error = "Las contraseñas no coinciden"
+            return redirect(url_for("change_password", email=email, error=error))
+        users_db.update_password(email, new_password)
+        return render_template("login.html")
 
 route = re.sub(r'^(\/).*', r'\1home', route)
 @app.route(route, methods=["GET", "POST"])
@@ -104,7 +136,6 @@ def home():
     user = users_db.check_user(session["username"])
     username = user["username"]
     role = user["role"]
-    
 
     if request.method == "POST":
         if "search_form" in request.form:
@@ -118,12 +149,11 @@ def home():
                 session['found'] = False
                 error = "Usuario no encontrado"
                 return render_template("home.html", role=role, error=error)
-            
-            return redirect(url_for("home"))
+            return redirect(url_for('home'))
 
         elif "send_message" in request.form:
             message = request.form["message"]
-            user_searched = session.get("user_searched")
+            user_searched = session.get('user_searched')
             if user_searched:
                 if messages_db.send_message(username, user_searched, message):
                     session["conversations"] = messages_db.conversations(username, user_searched)
@@ -133,15 +163,12 @@ def home():
             else:
                 error = "No hay un usuario buscado para enviar el mensaje"
                 return render_template("home.html", role=role, error=error)
-            
-            return redirect(url_for("home"))
+            return redirect(url_for('home'))
 
     username = user["username"]
     user_searched = session.get("user_searched")
     conversations = session.get("conversations")
     found = session.get("found")
-    print(username)
-    print(user_searched)
     return render_template("home.html", username=username, role=role, conversations=conversations, found=found, user_searched=user_searched)
 
 
@@ -171,7 +198,6 @@ def profile():
         user = users_db.check_user(session["username"])
         username = user["username"]
         role = user["role"]
-
         if request.method == "POST":
             password = request.form["password"]
             new_password = request.form["new_password"]
@@ -186,7 +212,7 @@ def profile():
                         "caracteres, una mayúscula, una minúscula, un número y "
                         "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
                         "espacios.")
-                return render_template("perfil.html", username=username,
+                return render_template("profile.html", username=username,
                                     role=role, error=error)
             if new_password != new_password2:
                 error = "Las contraseñas no coinciden"
@@ -200,7 +226,7 @@ def profile():
 
 
 route = re.sub(r'^(\/).*', r'\1/logout', route)
-@app.route("/logout", methods=["GET", "POST"])
+@app.route(route, methods=["GET", "POST"])
 def logout():
     if request.method == "GET":
         abort(404)
@@ -233,4 +259,3 @@ def verify_password(stored_password, salt, provided_password):
 
 if __name__ == "__main__":
     app.run(debug=True)
-

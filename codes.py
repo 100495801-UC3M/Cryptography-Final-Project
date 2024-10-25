@@ -21,16 +21,17 @@ class Codes:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 type TEXT NOT NULL,
                 value TEXT NOT NULL,
-                salt TEXT NOT NULL)''')
+                salt TEXT NOT NULL,
+                expiration_date TEXT)''')
         self.connection.commit()
 
-    def add_code(self, type, value):
+    def add_code(self, type, value, expiration_date):
         salt = self.generate_salt()
-        self.hash_code(value, salt)
+        value, salt = self.hash_code(value, salt)
         self.cursor.execute(
-            "INSERT INTO codes (type, value) VALUES "
-            "(?,?, ?)",
-            (type, value, salt))
+            "INSERT INTO codes (type, value, salt, expiration_date) VALUES "
+            "(?,?,?,?)",
+            (type, value, salt, expiration_date))
         self.connection.commit()
         last_id = self.cursorlastrowid
         return last_id
@@ -38,19 +39,21 @@ class Codes:
     def generate_salt(self):
         return os.urandom(16)
 
-    def hash_code(self, code, salt):
+    def hash_code(self, code, salt=None):
+        if salt == None:
+            salt = self.generate_salt
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt,
                          iterations=100000, backend=default_backend())
         code_hash = base64.urlsafe_b64encode(kdf.derive(code.encode()))
         logging.info(f"Algoritmo: PBKDF2-HMAC-SHA256, Longitud de clave: 32 "
                      f"bytes, Salt: {base64.urlsafe_b64encode(salt)}, "
                      f"Contraseña_Hash: {code_hash}")
-        return code_hash
+        return code_hash, salt
 
     def compare_code_from_id(self, code, id):
         registered_code = self.cursor.execute("SELECT value, salt FROM codes WHERE "
                             "id=?",   (id)).fetchall()
-        provided_code = self.hash_code(code, registered_code[1])
+        provided_code, salt = self.hash_code(code, registered_code[1])
         if provided_code == registered_code:
             return True
         else:
@@ -59,5 +62,4 @@ class Codes:
     def remove_from_id(self, code_id):
         self.cursor.execute(
             "DELETE FROM codes WHERE id=?", code_id)
-
         self.connection.commit()

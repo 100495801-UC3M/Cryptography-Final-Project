@@ -1,11 +1,12 @@
 import sqlite3
-
+from codes import Codes
 
 class Users:
-    def __init__(self, db_name="users.db"):
+    def __init__(self, codes_db, db_name="users.db"):
         self.connection = sqlite3.connect(db_name, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
+        self.codes_db = codes_db
         self.create_table()
 
     def create_table(self):
@@ -69,8 +70,9 @@ class Users:
         return self.cursor.execute("SELECT * FROM users").fetchall()
 
     def update_password(self, username, password):
-        self.cursor.execute("UPDATE users SET password=? WHERE "
-                            "username=?",   (password, username))
+        password, salt = self.codes_db.hash_code(password)
+        self.cursor.execute("UPDATE users SET password=?, salt=? WHERE "
+                            "username=? or email=?",   (password, salt, username, username))
 
         self.connection.commit()
 

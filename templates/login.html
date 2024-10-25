@@ -27,9 +27,9 @@
         </form>
         <button type="button" onclick="emailPopUp()">¿Olvidaste tu contraseña?</button>
         <div class="emailPopUp">
-            <form id="emailForm">
+            <form id="emailForm" action="/send_email" method ="POST">
                 <label for="email">Introduce el email de la cuenta:</label>
-                <input id="email" autocomplete="email" required>
+                <input id="email" name="email" autocomplete="email" required>
                 {% if error %}
                     <p style="color:red;">{{ error }}</p>
                 {% endif %}
