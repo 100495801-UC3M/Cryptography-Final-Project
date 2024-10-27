@@ -1,8 +1,9 @@
 import sqlite3
 from datetime import datetime
 
+
 class Messages:
-    def __init__(self, db_name="messages.db"):
+    def __init__(self, db_name="./db/messages.db"):
         self.connection = sqlite3.connect(db_name, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
@@ -16,16 +17,20 @@ class Messages:
                 sender TEXT NOT NULL,
                 receiver TEXT NOT NULL,
                 text TEXT NOT NULL,
+                hmac TEXT NOT NULL,
+                aes_key_sender TEXT NOT NULL,
+                aes_key_receiver TEXT NOT NULL,
                 datehour TEXT NOT NULL)''')
         self.connection.commit()
 
-    def send_message(self, sender, receiver, text):
+    def send_message(self, sender, receiver, text, hmac, aes_key_sender, aes_key_receiver):
+        # Función para añadir un mensaje
         try:
             date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.cursor.execute(
-                "INSERT INTO messages (sender, receiver, text, datehour) VALUES "
-                "(?, ?, ?, ?)",
-                (sender, receiver, text, date))
+                "INSERT INTO messages (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, datehour) VALUES "
+                "(?, ?, ?, ?, ?, ?, ?)",
+                (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, date))
             self.connection.commit()
             return True
         except sqlite3.IntegrityError:
@@ -41,22 +46,17 @@ class Messages:
 
         # Convertir a una lista de diccionarios
         conversations_list = [dict(row) for row in conversations]
-        print(conversations_list)  # Para verificar lo que se está obteniendo
         return conversations_list
-        # if not conversations:
-        #     return []
-
-        # # Añadir los últimos usuarios con los que se ha hablado en un dict. Se ordenarán de más nuevo a lo más viejo
-        # other_user = {}
-        # for msg in conversations:
-        #     if msg[1] == user:
-        #         colour = "blue"
-        #         if msg[2] not in other_user:
-        #             other_user[msg[2]] = []
-        #         other_user[msg[2]].append([msg[3], msg[4], colour])
-        #     else:
-        #         colour = "red"
-        #         if msg[1] not in other_user:
-        #             other_user[msg[1]] = []
-        #         other_user[msg[1]].append([msg[3], msg[4], colour])
-        # return other_user
+    
+    def get_message(self, id):
+        # Recuperar un mensaje por su id
+        return self.cursor.execute("SELECT * FROM messages WHERE id=?", (id))
+    
+    def list_messages(self):
+        # Devolver lista de todos los usuarios
+        return self.cursor.execute("SELECT * FROM messages").fetchall()
+    
+    def remove_messages(self, user):
+        # Eliminar mensajes de un usuario
+        self.cursor.execute("DELETE FROM messages WHERE sender=? OR receiver=?", (user, user))
+        self.connection.commit()

@@ -15,15 +15,15 @@
     <ul>
         {% for user in users %}
             <div class="user">
-                <li>id: {{user["id"]}} - Usuario: {{ user["username"] }} -
+                <li>Usuario: {{ user["username"] }} -
                     Email: {{user["email"]}} -
                     Contraseña: {{user["password"]}} - Rol: {{ user["role"] }}
                 </li>
                 {%  if user["role"] != "admin" %}
                     <form method="POST">
-                        <input type="hidden" name="id" value="{{ user["id"] }}">
+                        <input type="hidden" name="username" value="{{ user["username"] }}">
                         <button type="submit" id="delete">
-                            <img src="/static/images/papelera.png" alt="Eliminar">
+                            <img src="/static/images/bin.png" alt="Eliminar">
                         </button>
                     </form>
                 {% endif %}

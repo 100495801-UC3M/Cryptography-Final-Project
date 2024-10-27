@@ -1,12 +1,11 @@
 body {
-    margin: 20px;
     display: block;
-    text-align: start;
+    box-sizing: border-box;
+    padding: 10px;
 }
 
 .top {
     display: flex;
-    flex-direction: row;
 }
 
 .user {
@@ -25,6 +24,7 @@ ul, li {
 
 #delete:hover {
     background-color: red;
+    color: white;
 }
 
 img {
@@ -32,23 +32,40 @@ img {
     height: 16px;
 }
 
+.search {
+    display: block;
+}
+
+.search form{
+    display: flex;
+    align-items: center;
+}
 
 .messages {
     display: block;
 }
 
-.message-container {
+.message {
     margin: 5px;
     padding: 5px;
     border-radius: 6px;
+    width: max-content;
+    max-width: 100%;
+    word-wrap: break-word;
+    white-space: normal;
 }
 
 #sender {
     background-color: rgba(255, 0, 0, 0.39);
     border-bottom-right-radius: 0;
+    float: right;
 }
 
 #receiver {
     background-color: rgba(122, 122, 124, 0.322);
     border-bottom-left-radius: 0;
+}
+
+input {
+    max-height: fit-content;
 }
