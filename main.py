@@ -61,7 +61,6 @@ def register():
 
         public_key = security.serialize_public_key(public_key)
 
-        # result = users_db.add_admin(username, email, hashed_password, "admin", base64.urlsafe_b64encode(salt), public_key, private_key)
         result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), public_key, private_key)
 
 

@@ -22,20 +22,6 @@ class Users:
                 private_key TEXT)''')
         self.connection.commit()
 
-    def add_admin(self, username, email, password, role, salt, public_key, private_key):
-        # Añadir nuevo usuario admin a la base de datos
-        username, email = username.lower(), email.lower()
-        try:
-            self.cursor.execute(
-                "INSERT INTO users (username, email, password, role, salt, public_key, private_key) "
-                "VALUES "
-                "(?, ?, ?, ?, ?, ?, ?)",
-                (username, email, password, role, salt, public_key, private_key))
-            self.connection.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
-
     def add_user(self, username, email, password, salt, public_key, private_key):
         # Añadir nuevo usuario a la base de datos
         username, email = username.lower(), email.lower()
