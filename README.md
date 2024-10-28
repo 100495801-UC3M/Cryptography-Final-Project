@@ -1,4 +1,6 @@
-## Requisitos
+## Ejecución
+
+### Requisitos
 
 Antes de ejecutar la aplicación, asegúrate de tener instalado Python y pip en tu sistema.
 
@@ -19,7 +21,18 @@ Para ejecutar la aplicación, debes ejecutar el archivo main.py, puedes hacerlo 
 ```bash
 python main.py
 ```
+o
+```bash
+python3 main.py
+```
 
-Para poder ver e interactuar correctamente deberemos, en un navegador, abrir el servidor local que se ha levantado al ejecuar la aplicación, normalmente será (si queremos tener dos sesiones con dos usuarios distintos, tendremos que abrir el servidor en dos navegadores diferentes):
+Para poder ver e interactuar correctamente, debemos abrir en un navegador (si queremos tener dos sesiones con dos usuarios distintos, tendremos que abrir el servidor en dos navegadores diferentes) el servidor local que se ha levantado al ejecuar la aplicación, normalmente será :
 
 http://127.0.0.1:5000
+
+
+# Autores 
+
+Este proyecto ha sido realizado por:
+| [<img src="https://avatars.githubusercontent.com/u/158502944?v=4" width=115><br><sub>MARIO HIDALGO DÍAZ<br>100495801</sub>](https://github.com/100495801-UC3M) |  [<img src="https://avatars.githubusercontent.com/u/158503957?v=4&size=64" width=115><br><sub>Jorge Hernáez Ayuso<br>100495761</sub>](https://github.com/100495761)
+| :---: | :---: |

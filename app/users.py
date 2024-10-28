@@ -59,3 +59,7 @@ class Users:
         self.cursor.execute("DELETE FROM users WHERE username=?", (username,))
         self.connection.commit()
 
+    def promote_user(self, username):
+        # Ascender a admin a un usuario
+        self.cursor.execute("UPDATE users SET role='admin' WHERE username=?", (username,))
+        self.connection.commit()

@@ -159,6 +159,12 @@ def home():
             
             return redirect(url_for("home"))
 
+    if session.get("user_searched") is not None:
+        conversations = messages_db.conversations(session["username"], session.get("user_searched"))
+        private_key = security.deserialize_private_key(session["private_key"])
+        good_messages = security.check_messages(conversations, session["username"], private_key)
+        session["conversations"] = good_messages
+
     user_searched = session.get("user_searched")
     conversations = session.get("conversations")
     found = session.get("found")
@@ -172,11 +178,15 @@ def list_users():
         abort(404)
     if session["role"] != "admin":
         abort(404)
-    if request.method == "POST":
+    if request.method == "POST" and "delete" in request.form:
         user_deleted = request.form.get("username")
         messages_db.remove_messages(user_deleted)
         users_db.remove_user(user_deleted)
         logging.info("El usuario se ha eliminado de la tabla de datos correctamente.")
+
+    if request.method == "POST" and "promote" in request.form:
+        user_promoted = request.form.get("username")
+        users_db.promote_user(user_promoted)
     users = users_db.list_users()
     return render_template("users.html", users=users)
 

@@ -22,8 +22,11 @@
                 {%  if user["role"] != "admin" %}
                     <form method="POST">
                         <input type="hidden" name="username" value="{{ user["username"] }}">
-                        <button type="submit" id="delete">
+                        <button type="submit" name="delete" id="delete">
                             <img src="/static/images/bin.png" alt="Eliminar">
+                        </button>
+                        <button type="submit" name="promote" id="promote">
+                            Hacer admin
                         </button>
                     </form>
                 {% endif %}
