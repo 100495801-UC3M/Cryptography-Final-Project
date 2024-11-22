@@ -1,5 +1,6 @@
 import sqlite3
-
+from .security import create_petition
+from .security import get_public_key
 
 class Users:
     def __init__(self, db_name="./db/users.db"):
@@ -25,6 +26,7 @@ class Users:
     def add_user(self, username, email, password, salt, public_key, private_key):
         # Añadir nuevo usuario a la base de datos
         username, email = username.lower(), email.lower()
+        public_key = create_petition(public_key)
         try:
             self.cursor.execute(
                 "INSERT INTO users (username, email, password, salt, public_key, private_key) VALUES "
@@ -42,6 +44,8 @@ class Users:
             (username_or_email, username_or_email)).fetchone()
         if user is None:
             return False
+        user = dict(user)
+        user["public_key"] = get_public_key(user["public_key"])
         return user
 
     def list_users(self):

@@ -79,9 +79,9 @@ def encrypt_private_key(private_key, password, salt):
     private_encrypted_key = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.BestAvailableEncryption(key) 
+        encryption_algorithm=serialization.BestAvailableEncryption(key)
     )
-    
+
     return private_encrypted_key
 
 
@@ -97,7 +97,7 @@ def serialize_private_key(private_key):
 
 def serialize_public_key(public_key):
     # Serializar la clave pública
-    return public_key.public_bytes(encoding = serialization.Encoding.PEM, 
+    return public_key.public_bytes(encoding = serialization.Encoding.PEM,
     format = serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
@@ -144,7 +144,7 @@ def encrypt_aes_message(message, aes_key):
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(aes_key), modes.CFB(iv))
     encryptor = cipher.encryptor()
-    
+
     encrypted_message = iv + encryptor.update(message.encode()) + encryptor.finalize()
     logging.info(f"Mensaje cifrado con AES: {encrypted_message.hex()}")
     return encrypted_message
@@ -176,7 +176,7 @@ def verify_hmac(aes_key, encrypted_message, hmac_label_received):
     # Generar un nuevo HMAC usando la misma clave AES y verificar si el HMAC coincide con el recibido
     h = HMAC(aes_key, hashes.SHA256())
     h.update(encrypted_message)
-    
+
     try:
         h.verify(hmac_label_received)
         logging.info("HMAC verificado correctamente. El mensaje es auténtico.")
@@ -233,3 +233,11 @@ def check_messages(conversations, username, private_key):
                     message_decrypted = decrypt_message(message["text"], aes)
                     good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
     return good_messages
+
+"""--------------------------------------ENTREGA 2"----------------------------"""
+
+def create_petition(public_key):
+    return public_key
+
+def get_public_key(route):
+    return route
