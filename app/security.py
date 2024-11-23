@@ -2,7 +2,10 @@ import os
 import re
 import logging
 import base64
+
+from cryptography import x509
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes, serialization
@@ -234,10 +237,103 @@ def check_messages(conversations, username, private_key):
                     good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
     return good_messages
 
-"""--------------------------------------ENTREGA 2"----------------------------"""
+############################################## ENTREGA 2 ######################################################
 
 def create_petition(public_key):
     return public_key
 
 def get_public_key(route):
     return route
+
+def create_request(private_key, username, user_public_key, date):
+    csr_builder = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, username),
+        x509.SubjectKeyIdentifier.from_public_key(user_public_key),
+        x509.CRLEntryExtensionOID.INVALIDITY_DATE(date),
+    ]))
+    csr = csr_builder.sign(private_key, hashes.SHA256())
+    index = get_serial() + 1
+    route = "../AC/requests/" + str(index)
+    with open(route, "wb") as f:
+        f.write(csr.public_bytes(serialization.Encoding.PEM))
+    update_serial(index)
+    add_certificate_to_index(index, route)
+
+def get_serial():
+    filename = "../AC/serial"
+    try:
+        with open(filename, "r") as file:
+            last_serial = int(file.read())
+            return last_serial
+    except (ValueError, FileNotFoundError):
+        update_serial(0)
+        return 0
+
+def update_serial(index):
+    filename = "../AC/serial"
+    with open(filename, "w") as file:
+        file.write(f"{index:04d}")
+
+def add_certificate_to_index(index, route, verification = False):
+    filename = "../AC/index.txt"
+    certificate_string = f"{index:04d}, {route}, {verification}\n"
+    with open(filename, "a") as file:
+        file.write(certificate_string)
+
+def update_certificate_in_index(index, route, verification):
+    filename = "../AC/index.txt"
+    certificate = read_certificate_from_index(filename, index)
+
+    with open(filename, 'w') as file:
+        for line in file:
+            if certificate == line:
+                parts = line.strip().split(', ')
+                parts[1] = f'"{route}"'  # Reemplazar route
+                parts[2] = f'"{verification}"'  # Reemplazar verification
+                file.write(', '.join(parts) + '\n')
+            else:
+                file.write(line)
+
+def read_certificate_from_index(filename, index):
+    with open(filename, 'r') as file:
+        for line in file:
+            if line.startswith(f'"{index:04d}"'):
+                return line
+    return False
+
+def read_all_certificates_as_dict(filename):
+    cert_list = []
+    with open(filename, "r") as file:
+        for line in file:
+            parts = line.strip().split(", ")
+            entry = {"index": int(parts[0]), "route": parts[1], "verification": bool(parts[2])}
+            cert_list.append(entry)
+    return cert_list
+
+"""def self_signing_certificate(certificate):
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, username),
+        x509.SubjectKeyIdentifier.from_public_key(user_public_key),
+        x509.CRLEntryExtensionOID.INVALIDITY_DATE(date),
+    ])
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.now(datetime.timezone.utc)
+    ).not_valid_after(
+        # Our certificate will be valid for 10 days
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=10)
+    ).add_extension(
+        x509.SubjectAlternativeName([x509.DNSName("localhost")]),
+        critical=False,
+        # Sign our certificate with our private key
+    ).sign(key, hashes.SHA256())
+    # Write our certificate out to disk.
+    with open("path/to/certificate.pem", "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))"""
