@@ -59,7 +59,12 @@ def register():
 
         private_key = security.encrypt_private_key(private_key, password, salt)
 
+        # TODO quitar esta linea cuando se termine la entrega
         public_key = security.serialize_public_key(public_key)
+
+        public_key = security.create_petition(public_key)
+        # TODO agregar funcion aqui para que se informe al usuario que se esta procesando la peticion
+
 
         result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), public_key, private_key)
 
@@ -92,6 +97,10 @@ def login():
                     session["role"] = user["role"]
                     private_key = security.decrypt_private_key(user["private_key"], password, salt)
                     private_key = security.serialize_private_key(private_key)
+
+                    # TODO no se si esta linea está bien o si es necesaria si quiera
+                    session["public_key"] = security.get_public_key(user["public_key"])
+
                     session["private_key"] = private_key
                     session.permanent = True
                     logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
@@ -123,6 +132,10 @@ def home():
                 session["user_searched"] = user_searched_data["username"]
                 conversations = messages_db.conversations(session["username"], session["user_searched"])
                 private_key = security.deserialize_private_key(session["private_key"])
+
+                # TODO no se si esta linea está bien o si es necesaria si quiera
+                session["public_key"] = security.get_public_key(session["public_key"])
+
                 good_messages = security.check_messages(conversations, session["username"], private_key)
                 session["conversations"] = good_messages
             else:
@@ -137,9 +150,15 @@ def home():
             user_searched = session.get("user_searched")
             if user_searched:
                 receiver = users_db.check_user(user_searched)
+                #TODO quitar la primera linea y luego cambiar receiver_public_key por receiver["public_key"]
                 receiver_public_key = security.deserialize_public_key(receiver["public_key"])
+                receiver_public_key = security.get_public_key(receiver_public_key)
+
                 sender = users_db.check_user(session["username"])
+                #TODO quitar la primera linea y luego cambiar receiver_public_key por sender["public_key"]
                 sender_public_key = security.deserialize_public_key(sender["public_key"])
+                sender_public_key = security.get_public_key(sender_public_key)
+
                 aes_key = security.generate_salt_aes("aes", 32)
                 encrypted_message = security.encrypt_aes_message(message, aes_key)
                 hmac = security.generate_hmac(aes_key, encrypted_message)

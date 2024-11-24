@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
 
+from .users import Users
 
 def check_password(password):
     # Revisar si la contraseña cumple con los requisitos mínimos
@@ -245,32 +246,39 @@ def create_petition(public_key):
 def get_public_key(route):
     return route
 
-def create_request(private_key, username, user_public_key, date):
+#TODO renombrar a create_petition cuando esté terminado
+def create_request(username, date, public_key, private_key):
     csr_builder = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, username),
-        x509.SubjectKeyIdentifier.from_public_key(user_public_key),
-        x509.CRLEntryExtensionOID.INVALIDITY_DATE(date),
-    ]))
+    ])).add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(public_key),
+        critical=False
+    ).add_extension(
+        x509.UnrecognizedExtension(
+            x509.ObjectIdentifier("1.3.6.1.4.1.343.1.1"),  # OID personalizado
+            date.encode("utf-8")),
+        critical=False
+    )
     csr = csr_builder.sign(private_key, hashes.SHA256())
     index = get_serial() + 1
-    route = "../AC/requests/" + str(index)
+    route = f"../AC/requests/{index:04d}.pem"
     with open(route, "wb") as f:
         f.write(csr.public_bytes(serialization.Encoding.PEM))
     update_serial(index)
     add_certificate_to_index(index, route)
+    return index
 
 def get_serial():
-    filename = "../AC/serial"
+    filename = "../AC/serial.txt"
     try:
         with open(filename, "r") as file:
             last_serial = int(file.read())
             return last_serial
     except (ValueError, FileNotFoundError):
-        update_serial(0)
-        return 0
+        return f"{0:04d}"
 
 def update_serial(index):
-    filename = "../AC/serial"
+    filename = "../AC/serial.txt"
     with open(filename, "w") as file:
         file.write(f"{index:04d}")
 
@@ -282,7 +290,7 @@ def add_certificate_to_index(index, route, verification = False):
 
 def update_certificate_in_index(index, route, verification):
     filename = "../AC/index.txt"
-    certificate = read_certificate_from_index(filename, index)
+    certificate = read_certificate_from_index(index)
 
     with open(filename, 'w') as file:
         for line in file:
@@ -294,10 +302,12 @@ def update_certificate_in_index(index, route, verification):
             else:
                 file.write(line)
 
-def read_certificate_from_index(filename, index):
+def read_certificate_from_index(index):
+    filename = "../AC/index.txt"
     with open(filename, 'r') as file:
         for line in file:
             if line.startswith(f'"{index:04d}"'):
+                line.strip()
                 return line
     return False
 
@@ -305,35 +315,59 @@ def read_all_certificates_as_dict(filename):
     cert_list = []
     with open(filename, "r") as file:
         for line in file:
-            parts = line.strip().split(", ")
-            entry = {"index": int(parts[0]), "route": parts[1], "verification": bool(parts[2])}
+            entry = get_parts_as_dict(line)
             cert_list.append(entry)
     return cert_list
 
-"""def self_signing_certificate(certificate):
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, username),
-        x509.SubjectKeyIdentifier.from_public_key(user_public_key),
-        x509.CRLEntryExtensionOID.INVALIDITY_DATE(date),
-    ])
-    cert = x509.CertificateBuilder().subject_name(
-        subject
-    ).issuer_name(
-        issuer
-    ).public_key(
-        key.public_key()
-    ).serial_number(
-        x509.random_serial_number()
-    ).not_valid_before(
-        datetime.datetime.now(datetime.timezone.utc)
-    ).not_valid_after(
-        # Our certificate will be valid for 10 days
-        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=10)
-    ).add_extension(
-        x509.SubjectAlternativeName([x509.DNSName("localhost")]),
-        critical=False,
-        # Sign our certificate with our private key
-    ).sign(key, hashes.SHA256())
-    # Write our certificate out to disk.
-    with open("path/to/certificate.pem", "wb") as f:
-        f.write(cert.public_bytes(serialization.Encoding.PEM))"""
+#TODO renombrar a get_public_key cuando esté terminado
+def get_public_key_from_certificate(index):
+    route = read_certificate_from_index(index)
+    certificate = open_certificate(route)
+    public_key = certificate.public_key()
+    return public_key
+
+def verify_cerificate(index):
+    try:
+        # Cargar el certificado
+        certificate_parameters = get_parts_as_dict((read_certificate_from_index(index)))
+
+        # Obtener los datos firmados del certificado (TBS = "To Be Signed")
+        certificate = open_certificate(certificate_parameters[1])
+
+        # Obtener los datos To Be Signed y la firma
+        tbs_cert = certificate.tbs_certificate_bytes
+        signature = certificate.signature
+
+        # Conseguimos la clave pública de CA
+        ca_public_key = get_AC_public_key()
+
+        # Verificar la firma con la clave pública de la CA
+        ca_public_key.verify(
+            signature,
+            tbs_cert,
+            padding.PKCS1v15(),  # Esquema de padding para RSA
+            certificate.signature_hash_algorithm
+        )
+
+        # Si la verificación es exitosa, actualizamos el índice
+        update_certificate_in_index(index, certificate_parameters[1], True)
+        return True
+
+    except Exception as e:
+        print(f"Error en la verificación: {e}")
+        return False
+
+
+def open_certificate(certificate):
+    with open(certificate, "rb") as file:
+        return x509.load_pem_x509_certificate(file.read())
+
+
+def get_AC_public_key():
+    Users_table = Users()
+    AC = Users_table.check_user("USUARIO AC")
+    return get_public_key_from_certificate(AC)
+
+def get_parts_as_dict(line):
+    parts = line.strip().split(", ")
+    return {"index": int(parts[0]), "route": parts[1], "verification": bool(parts[2])}
