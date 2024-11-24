@@ -34,35 +34,65 @@
             {% endif %}
         </div>
     </div>
-    <div class="messages">
-        <br><hr>
-        <!-- Mostrar mensajes y opción de enviar si se ha encontrado al usuario -->
-        {% if found %}
-            <h4>Conversación con: {{ user_searched }}</h4>
-            {% for message in conversations %}
-                {% if username == message[1] %}
+    <br><hr>
+    <div class="bottom">
+        <div class="list">
+            <h3>Chats:</h3>
+            {% for message in list_conversations %}
+                {% if username != message[0] %}
                     <div>
-                        <p class="message" id="sender">{{ message[2] }} - {{ message[3] }}</p>
+                        <form method="POST" class="person">
+                            <input type="hidden" id="user_searched" name="user_searched" value="{{ message[0] }}">
+                            <button type="submit" name="search_form">
+                                <p class="nombre">
+                                    {{ message[0] }}
+                                </p>
+                                <p style="overflow: hidden; text-align: left;">
+                                    {{ message[1] }}
+                                </p>
+                            </button>
+                        </form>
                     </div>
-                    <br>
-                    <br>
-                    <br>
                 {% else %}
                     <div>
-                        <p class="message" id="receiver">{{ message[2] }} - {{ message[3] }}</p>
+                        <form method="POST" class="person">
+                            <input type="hidden" id="user_searched" name="user_searched" value="{{ message[0] }}">
+                            <button type="submit" name="search_form">
+                                <p class="nombre">
+                                    Yo ({{ message[0] }})
+                                </p>
+                                <p style="overflow: hidden; text-align: left;">
+                                    {{ message[1] }}
+                                </p>
+                            </button>
+                        </form>
                     </div>
-                    <br>
-                    <br>
-                    <br>
                 {% endif %}
             {% endfor %}
-            <form method="POST">
-                <input type="text" id="message" name="message" required>
-                <button type="submit" name="send_message">Enviar</button>
-            </form>
-        {% else %}
-            <p>No hay mensajes disponibles. Busca un usuario.</p>
-        {% endif %}
+        </div>
+        <div class="messages">
+            <!-- Mostrar mensajes y opción de enviar si se ha encontrado al usuario -->
+            {% if found %}
+                <h4>Conversación con: {{ user_searched }}</h4>
+                {% for message in conversations %}
+                    {% if username == message[1] %}
+                        <div class="message_container" id="sender">
+                            <p class="message">{{ message[2] }} - {{ message[3] }}</p>
+                        </div>
+                    {% else %}
+                        <div class="message_container" id="receiver">
+                            <p class="message">{{ message[2] }} - {{ message[3] }}</p>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+                <form method="POST" class="send">
+                    <input type="text" id="message" name="message" required autofocus>
+                    <button type="submit" name="send_message">Enviar</button>
+                </form>
+            {% else %}
+                <p>No hay mensajes disponibles. Busca un usuario.</p>
+            {% endif %}
+        </div>
     </div>
 </body>
 </html>

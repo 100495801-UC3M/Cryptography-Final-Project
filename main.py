@@ -121,7 +121,16 @@ route = re.sub(r"^(\/).*", r"\1home", route)
 @app.route(route, methods=["GET", "POST"])
 def home():
     if "username" not in session:
-        return redirect(url_for("login"))   
+        return redirect(url_for("login"))
+
+    list = []
+    list_conversations = messages_db.list_conversations(session["username"])
+    for person in list_conversations:
+        private_key = security.deserialize_private_key(session["private_key"])
+        message = messages_db.get_message(int(person[0]))
+        last_message = security.check_messages(message, session["username"], private_key)
+        last_message = last_message[0][2]
+        list.append([person[1], last_message])
 
     if request.method == "POST":
         if "search_form" in request.form:
@@ -141,7 +150,7 @@ def home():
             else:
                 session["found"] = False
                 error = "Usuario no encontrado"
-                return render_template("home.html", role=session["role"], error=error)
+                return render_template("home.html", list_conversations = list, role=session["role"], error=error)
             
             return redirect(url_for("home"))
 
@@ -171,10 +180,10 @@ def home():
                     session["conversations"] = good_messages
                 else:
                     error = "Error al enviar el mensaje"
-                    return render_template("home.html", role=session["role"], error=error)
+                    return render_template("home.html", list_conversations = list, role=session["role"], error=error)
             else:
                 error = "No hay un usuario buscado para enviar el mensaje"
-                return render_template("home.html", role=session["role"], error=error)
+                return render_template("home.html", list_conversations = list, role=session["role"], error=error)
             
             return redirect(url_for("home"))
 
@@ -187,7 +196,7 @@ def home():
     user_searched = session.get("user_searched")
     conversations = session.get("conversations")
     found = session.get("found")
-    return render_template("home.html", username=session["username"], role=session["role"], conversations=conversations, found=found, user_searched=user_searched)
+    return render_template("home.html", list_conversations = list, username=session["username"], role=session["role"], conversations=conversations, found=found, user_searched=user_searched)
 
 
 route = re.sub(r"^(\/).*", r"\1users", route)

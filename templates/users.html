@@ -15,21 +15,25 @@
     <ul>
         {% for user in users %}
             <div class="user">
-                <li>Usuario: {{ user["username"] }} -
-                    Email: {{user["email"]}} -
-                    Contraseña: {{user["password"]}} - Rol: {{ user["role"] }}
-                </li>
-                {%  if user["role"] != "admin" %}
-                    <form method="POST">
-                        <input type="hidden" name="username" value="{{ user["username"] }}">
-                        <button type="submit" name="delete" id="delete">
-                            <img src="/static/images/bin.png" alt="Eliminar">
-                        </button>
-                        <button type="submit" name="promote" id="promote">
-                            Hacer admin
-                        </button>
-                    </form>
-                {% endif %}
+                <div class="left">
+                    <li>Usuario: {{ user["username"] }} -
+                        Email: {{user["email"]}} -
+                        Contraseña: {{user["password"]}} - Rol: {{ user["role"] }}
+                    </li>
+                </div>
+                <div class="rigth">
+                    {%  if user["role"] != "admin" %}
+                        <form method="POST">
+                            <input type="hidden" name="username" value="{{ user["username"] }}">
+                            <button type="submit" name="delete" id="delete">
+                                <img src="/static/images/bin.png" alt="Eliminar">
+                            </button>
+                            <button type="submit" name="promote" id="promote">
+                                Hacer admin
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
             <hr>
         {% endfor %}

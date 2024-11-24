@@ -26,7 +26,7 @@ class Messages:
     def send_message(self, sender, receiver, text, hmac, aes_key_sender, aes_key_receiver):
         # Función para añadir un mensaje
         try:
-            date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            date = datetime.now().strftime("%H:%M:%S %d-%m-%Y")
             self.cursor.execute(
                 "INSERT INTO messages (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, datehour) VALUES "
                 "(?, ?, ?, ?, ?, ?, ?)",
@@ -50,11 +50,31 @@ class Messages:
     
     def get_message(self, id):
         # Recuperar un mensaje por su id
-        return self.cursor.execute("SELECT * FROM messages WHERE id=?", (id))
+        return self.cursor.execute("SELECT * FROM messages WHERE id=?", (id,))
     
     def list_messages(self):
-        # Devolver lista de todos los usuarios
+        # Devolver lista de todos los mensajes
         return self.cursor.execute("SELECT * FROM messages").fetchall()
+    
+    def list_conversations(self, username):
+        # Devolver lista de todas las conversaciones del usuario
+        return self.cursor.execute(
+            """
+            SELECT
+                id,
+                CASE 
+                    WHEN sender = ? THEN receiver
+                    ELSE sender
+                END AS conversation_partner,
+                text AS last_message,
+                MAX(datehour) AS last_date
+            FROM messages
+            WHERE sender = ? OR receiver = ?
+            GROUP BY conversation_partner
+            ORDER BY last_date DESC
+            """,
+            (username, username, username)
+        ).fetchall()
     
     def remove_messages(self, user):
         # Eliminar mensajes de un usuario

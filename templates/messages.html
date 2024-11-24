@@ -15,14 +15,18 @@
     <ul>
         {% for message in messages %}
             <div class="user">
-                <li>Remitente: {{message["sender"]}} -
-                    Destinatario: {{message["receiver"]}} -
-                    Text: {{message["text"]}}
-                </li>
-                <form method="POST">
-                    <input type="hidden" name="id" value="{{ message["id"] }}">
-                    <button type="submit" id="decrypt">Decrypt</button>
-                </form>
+                <div class="left">
+                    <li>Remitente: {{message["sender"]}} -
+                        Destinatario: {{message["receiver"]}} -
+                        Text: {{message["text"]}}
+                    </li>
+                </div>      
+                <div class="rigth">
+                    <form method="POST">
+                        <input type="hidden" name="id" value="{{ message["id"] }}">
+                        <button type="submit" id="decrypt">Decrypt</button>
+                    </form>
+                </div>
             </div>
             <hr>
         {% endfor %}
