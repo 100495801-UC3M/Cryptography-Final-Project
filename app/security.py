@@ -222,20 +222,30 @@ def decrypt_aes_rsa_key(encrypted_aes_key, private_key):
 def check_messages(conversations, username, private_key):
     # Verificar si los mensajes se puden descifrar con la clave privada y devolver los que si se han podido
     good_messages = []
+    Users_table = Users()
+    username_public_key = Users_table.check_user(username)["public_key"]
+    username_public_key = deserialize_public_key(username_public_key)
     for message in conversations:
             if message["sender"] == username:
                 try:
                     aes = decrypt_aes_rsa_key(message["aes_key_sender"], private_key)
+                    public_key = username_public_key
                 except:
                     return "error"
             else:
                 try:
                     aes = decrypt_aes_rsa_key(message["aes_key_receiver"], private_key)
+                    public_key = Users_table.check_user(message["sender"])["public_key"]
+                    public_key = deserialize_public_key(public_key)
                 except:
                     return "error"
-            if verify_hmac(aes, message["text"], message["hmac"]):
+            message_to_verify = message["text"] + message["hmac"]
+            if verify_message(message_to_verify, message["signature"], public_key):
+                if verify_hmac(aes, message["text"], message["hmac"]):
                     message_decrypted = decrypt_message(message["text"], aes)
                     good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
+                    text = message["text"]
+                    logging.info(f"El mensaje: {text.hex()} ha sido verificado correctamente")
     return good_messages
 
 ############################################## ENTREGA 2 ######################################################
@@ -409,3 +419,32 @@ def get_AC_private_key():
     Users_table = Users()
     AC = Users_table.check_user("USUARIO AC")
     return
+
+                        # PARA FIRMAR
+
+def sign_message(message, sender_private_key):
+    signature = sender_private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    return signature
+
+def verify_message(message, signature, public_key):
+    try:
+        public_key.verify(
+            signature,
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256())
+        #text = message["text"]
+        #logging.info(f"El mensaje: {text.hex()} ha sido firmado por el método SHA256")
+        return True
+    except:
+        return False

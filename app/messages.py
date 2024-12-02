@@ -20,17 +20,18 @@ class Messages:
                 hmac TEXT NOT NULL,
                 aes_key_sender TEXT NOT NULL,
                 aes_key_receiver TEXT NOT NULL,
-                datehour TEXT NOT NULL)''')
+                datehour TEXT NOT NULL,
+                signature TEXT NOT NULL)''')
         self.connection.commit()
 
-    def send_message(self, sender, receiver, text, hmac, aes_key_sender, aes_key_receiver):
+    def send_message(self, sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, signature):
         # Función para añadir un mensaje
         try:
             date = datetime.now().strftime("%H:%M:%S %d-%m-%Y")
             self.cursor.execute(
-                "INSERT INTO messages (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, datehour) VALUES "
-                "(?, ?, ?, ?, ?, ?, ?)",
-                (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, date))
+                "INSERT INTO messages (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, datehour, signature) VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?)",
+                (sender, receiver, text, hmac, aes_key_sender, aes_key_receiver, date, signature))
             self.connection.commit()
             return True
         except sqlite3.IntegrityError:
