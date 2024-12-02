@@ -15,7 +15,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
 
-from .users import Users
 
 def check_password(password):
     # Revisar si la contraseña cumple con los requisitos mínimos
@@ -221,23 +220,34 @@ def decrypt_aes_rsa_key(encrypted_aes_key, private_key):
     return aes_key
 
 
-def check_messages(conversations, username, private_key):
+def check_messages(conversations, username, username_public_key, username_private_key):
     # Verificar si los mensajes se puden descifrar con la clave privada y devolver los que si se han podido
     good_messages = []
     for message in conversations:
             if message["sender"] == username:
                 try:
-                    aes = decrypt_aes_rsa_key(message["aes_key_sender"], private_key)
+                    aes = decrypt_aes_rsa_key(message["aes_key_sender"], username_private_key)
+                    public_key = username_public_key
                 except:
                     return "error"
             else:
                 try:
-                    aes = decrypt_aes_rsa_key(message["aes_key_receiver"], private_key)
+                    aes = decrypt_aes_rsa_key(message["aes_key_receiver"], username_private_key)
+                    index = get_certificate_index(message["sender"], False)
+                    if index == None:
+                        route = "AC/solicitudes/" + message["sender"] + ".pem"
+                        public_key = get_public_key_from_request(route)
+                    else:
+                        route = "AC/nuevoscerts/" + index + ".pem"
+                        public_key = get_public_key_from_certificate(route)
                 except:
                     return "error"
-            if verify_hmac(aes, message["text"], message["hmac"]):
+            message_to_verify = message["text"] + message["hmac"]
+            if verify_message(message_to_verify, message["signature"], public_key):
+                if verify_hmac(aes, message["text"], message["hmac"]):
                     message_decrypted = decrypt_message(message["text"], aes)
                     good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
+                    logging.info(f"La firma del mensaje ha sido verificada correctamente")
     return good_messages
 
 
@@ -338,3 +348,32 @@ def get_public_key_from_request(request_path):
         csr_data  = f.read()
     csr = x509.load_pem_x509_csr(csr_data , default_backend())
     return csr.public_key()
+
+                        # PARA FIRMAR
+def sign_message(message, sender_private_key):
+    signature = sender_private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    #NOTA: El log aparece ANTES de la verificación de todos los mensajes, por lo que aunque esté en la terminal,
+    # puede que no lo encuentres rápidamente. Recomendable usar CNTRL + F y buscar "chacha256" en la terminal.
+    logging.info(f"La firma del mensaje: {message.hex()} ha sido creada con ChaCha256")
+    return signature
+def verify_message(message, signature, public_key):
+    try:
+        public_key.verify(
+            signature,
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256())
+
+        return True
+    except:
+        return False

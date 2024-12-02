@@ -140,7 +140,12 @@ def home():
     for person in list_conversations:
         private_key = security.deserialize_private_key(session["private_key"])
         message = messages_db.get_message(int(person[0]))
-        last_message = security.check_messages(message, session["username"], private_key)
+
+        index_username = security.get_certificate_index(session["username"], False)
+        route = "AC/nuevoscerts/" + index_username + ".pem"
+        public_key = security.get_public_key_from_certificate(route)
+
+        last_message = security.check_messages(message, session["username"], public_key, private_key)
         last_message = last_message[0][2]
         list.append([person[1], last_message])
 
@@ -154,7 +159,11 @@ def home():
                 conversations = messages_db.conversations(session["username"], session["user_searched"])
                 private_key = security.deserialize_private_key(session["private_key"])
 
-                good_messages = security.check_messages(conversations, session["username"], private_key)
+                index_username = security.get_certificate_index(session["username"], False)
+                route = "AC/nuevoscerts/" + index_username + ".pem"
+                public_key = security.get_public_key_from_certificate(route)
+
+                good_messages = security.check_messages(conversations, session["username"], public_key, private_key)
                 session["conversations"] = good_messages
             else:
                 session["found"] = False
@@ -184,12 +193,16 @@ def home():
                 aes_key = security.generate_salt_aes("aes", 32)
                 encrypted_message = security.encrypt_aes_message(message, aes_key)
                 hmac = security.generate_hmac(aes_key, encrypted_message)
+
+                sender_private_key = security.deserialize_private_key(session["private_key"])
+                message_to_sign = encrypted_message + hmac
+                signature = security.sign_message(message_to_sign, sender_private_key)
+
                 encrypted_aes_key_sender = security.encrypt_aes_rsa_key(aes_key, sender_public_key)
                 encrypted_aes_key_receiver = security.encrypt_aes_rsa_key(aes_key, receiver_public_key)
-                if messages_db.send_message(session["username"], user_searched, encrypted_message, hmac, encrypted_aes_key_sender, encrypted_aes_key_receiver):
+                if messages_db.send_message(session["username"], user_searched, encrypted_message, hmac, encrypted_aes_key_sender, encrypted_aes_key_receiver, signature):
                     conversations = messages_db.conversations(session["username"], user_searched)
-                    private_key = security.deserialize_private_key(session["private_key"])
-                    good_messages = security.check_messages(conversations, session["username"], private_key)
+                    good_messages = security.check_messages(conversations, session["username"], sender_public_key, sender_private_key)
                     session["conversations"] = good_messages
                 else:
                     error = "Error al enviar el mensaje"
@@ -203,7 +216,12 @@ def home():
     if session.get("user_searched") is not None:
         conversations = messages_db.conversations(session["username"], session.get("user_searched"))
         private_key = security.deserialize_private_key(session["private_key"])
-        good_messages = security.check_messages(conversations, session["username"], private_key)
+
+        index_username = security.get_certificate_index(session["username"], False)
+        route = "AC/nuevoscerts/" + index_username + ".pem"
+        public_key = security.get_public_key_from_certificate(route)
+
+        good_messages = security.check_messages(conversations, session["username"], public_key, private_key)
         session["conversations"] = good_messages
 
     user_searched = session.get("user_searched")
@@ -249,7 +267,12 @@ def list_messages():
         message_id = request.form.get("id")
         message = messages_db.get_message(message_id)
         private_key = security.deserialize_private_key(session["private_key"])
-        message = security.check_messages(message, session["username"], private_key)
+
+        index_username = security.get_certificate_index(session["username"], False)
+        route = "AC/nuevoscerts/" + index_username + ".pem"
+        public_key = security.get_public_key_from_certificate(route)
+
+        message = security.check_messages(message, session["username"], public_key, private_key)
         if message != "error":
             for m in messages_list:
                 if int(m["id"]) == int(message_id):
