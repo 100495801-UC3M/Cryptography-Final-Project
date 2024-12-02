@@ -29,17 +29,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 route = "/"
 @app.route(route)
 def index():
+    # Ruta de la página de inicio de la web
     return render_template("index.html")
 
 
 route = re.sub(r"^(\/).*", r"\1register", route)
 @app.route(route, methods=["GET", "POST"])
 def register():
+    # Ruta de registro de usuario
     if "username" in session:
         return redirect(url_for("home"))
     if request.method == "POST":
-        username = request.form["username"].strip()
-        email = request.form["email"].strip()
+        username = request.form["username"].strip().lower()
+        email = request.form["email"].strip().lower()
         password = request.form["password"]
         password2 = request.form["password2"]
         if not security.check_password(password):
@@ -57,16 +59,11 @@ def register():
 
         private_key, public_key = security.generate_keys()
 
+        security.create_request(username, public_key, private_key)
+
         private_key = security.encrypt_private_key(private_key, password, salt)
 
-        # TODO quitar esta linea cuando se termine la entrega
-        public_key = security.serialize_public_key(public_key)
-
-        public_key = security.create_petition(public_key)
-        # TODO agregar funcion aqui para que se informe al usuario que se esta procesando la peticion
-
-
-        result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), public_key, private_key)
+        result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), private_key)
 
 
         if result:
@@ -82,6 +79,7 @@ def register():
 route = re.sub(r"^(\/).*", r"\1login", route)
 @app.route(route, methods=["GET", "POST"])
 def login():
+    # Ruta de inicio de sesión
     if "username" in session:
         return redirect(url_for("home"))
     if request.method == "POST":
@@ -93,18 +91,31 @@ def login():
                 stored_password = user["password"]
                 salt = base64.urlsafe_b64decode(user["salt"])
                 if security.verify_password(stored_password, salt, password):
-                    session["username"] = user["username"]
-                    session["role"] = user["role"]
-                    private_key = security.decrypt_private_key(user["private_key"], password, salt)
-                    private_key = security.serialize_private_key(private_key)
+                    index = security.get_certificate_index(user["username"], True)
+                    if index != None:
+                        route = "AC/nuevoscerts/" + index + ".pem"
+                        if security.verify_certificate(route):
+                            session["username"] = user["username"]
+                            session["role"] = user["role"]
+                            private_key = security.decrypt_private_key(user["private_key"], password, salt)
+                            private_key = security.serialize_private_key(private_key)
 
-                    # TODO no se si esta linea está bien o si es necesaria si quiera
-                    session["public_key"] = security.get_public_key(user["public_key"])
-
-                    session["private_key"] = private_key
-                    session.permanent = True
-                    logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
-                    return redirect(url_for("home"))
+                            session["private_key"] = private_key
+                            session.permanent = True
+                            logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
+                            return redirect(url_for("home"))
+                        else:
+                            route = "AC/nuevoscerts/" + index + ".pem"
+                            public_key = security.get_public_key_from_certificate(route)
+                            private_key = security.decrypt_private_key(user["private_key"], password, salt)
+                            security.create_request(user["username"], public_key , private_key)
+                            logging.error(f"Certificado alterado o caducado para {username_or_email}.")
+                            error = "Ha habido un error con su certificado, debe esperar a que sea aprobado en el sistema nuevamente"
+                            return render_template("login.html", error=error)
+                    else:
+                        logging.error(f"Certificado en espera o no aceptado para {username_or_email}.")
+                        error = "Debe esperar a que sea aprobado en el sistema"
+                        return render_template("login.html", error=error)
                 else:
                     logging.error(f"Intento fallido de inicio de sesión para {username_or_email}.")
                     error = "Usuario o contraseña incorrectos o la cuenta no existe"
@@ -120,6 +131,7 @@ def login():
 route = re.sub(r"^(\/).*", r"\1home", route)
 @app.route(route, methods=["GET", "POST"])
 def home():
+    # Ruta pricipal de un usuario cuando ha inicia sesión
     if "username" not in session:
         return redirect(url_for("login"))
 
@@ -142,9 +154,6 @@ def home():
                 conversations = messages_db.conversations(session["username"], session["user_searched"])
                 private_key = security.deserialize_private_key(session["private_key"])
 
-                # TODO no se si esta linea está bien o si es necesaria si quiera
-                session["public_key"] = security.get_public_key(session["public_key"])
-
                 good_messages = security.check_messages(conversations, session["username"], private_key)
                 session["conversations"] = good_messages
             else:
@@ -159,14 +168,18 @@ def home():
             user_searched = session.get("user_searched")
             if user_searched:
                 receiver = users_db.check_user(user_searched)
-                #TODO quitar la primera linea y luego cambiar receiver_public_key por receiver["public_key"]
-                receiver_public_key = security.deserialize_public_key(receiver["public_key"])
-                receiver_public_key = security.get_public_key(receiver_public_key)
+                index_receiver= security.get_certificate_index(receiver["username"], False)
+                if index_receiver == None:
+                    route = "AC/solicitudes/" + receiver["username"] + ".pem"
+                    receiver_public_key = security.get_public_key_from_request(route)
+                else:
+                    route = "AC/nuevoscerts/" + index_receiver + ".pem"
+                    receiver_public_key = security.get_public_key_from_certificate(route)
 
                 sender = users_db.check_user(session["username"])
-                #TODO quitar la primera linea y luego cambiar receiver_public_key por sender["public_key"]
-                sender_public_key = security.deserialize_public_key(sender["public_key"])
-                sender_public_key = security.get_public_key(sender_public_key)
+                index_sender = security.get_certificate_index(sender["username"], False)
+                route = "AC/nuevoscerts/" + index_sender + ".pem"
+                sender_public_key = security.get_public_key_from_certificate(route)
 
                 aes_key = security.generate_salt_aes("aes", 32)
                 encrypted_message = security.encrypt_aes_message(message, aes_key)
@@ -202,6 +215,7 @@ def home():
 route = re.sub(r"^(\/).*", r"\1users", route)
 @app.route(route, methods=["GET", "POST"])
 def list_users():
+    # Ruta de lista de usuarios
     if "username" not in session:
         abort(404)
     if session["role"] != "admin":
@@ -222,6 +236,7 @@ def list_users():
 route = re.sub(r"^(\/).*", r"\1messages", route)
 @app.route(route, methods=["GET", "POST"])
 def list_messages():
+    # Ruta de lista de mensajes
     if "username" not in session:
         abort(404)
     if session["role"] != "admin":
@@ -246,6 +261,7 @@ def list_messages():
 route = re.sub(r"^(\/).*", r"\1/profile", route)
 @app.route(route, methods=["GET", "POST"])
 def profile():
+    # Ruta de perfil de usuario
     if "username" not in session:
         return redirect(url_for("login"))
     else:
@@ -285,6 +301,7 @@ def profile():
 route = re.sub(r"^(\/).*", r"\1/logout", route)
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
+    # Cerrado de sesión
     if request.method == "GET":
         abort(404)
     else:

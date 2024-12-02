@@ -17,18 +17,29 @@ class Users:
                 password TEXT NOT NULL,
                 role TEXT DEFAULT "client",
                 salt TEXT NOT NULL,
-                public_key TEXT,
                 private_key TEXT)''')
         self.connection.commit()
 
-    def add_user(self, username, email, password, salt, public_key, private_key):
+    # def add_user(self, username, email, password, salt, private_key):
+    #     # Añadir nuevo admin a la base de datos
+    #     try:
+    #         self.cursor.execute(
+    #             "INSERT INTO users (username, email, password, role, salt, private_key) VALUES "
+    #             "(?, ?, ?, ?, ?, ?)",
+    #             (username, email, password, "admin", salt, private_key))
+    #         self.connection.commit()
+    #         return True
+    #     except sqlite3.IntegrityError:
+    #         return False
+        
+
+    def add_user(self, username, email, password, salt, private_key):
         # Añadir nuevo usuario a la base de datos
-        username, email = username.lower(), email.lower()
         try:
             self.cursor.execute(
-                "INSERT INTO users (username, email, password, salt, public_key, private_key) VALUES "
-                "(?, ?, ?, ?, ?, ?)",
-                (username, email, password, salt, public_key, private_key))
+                "INSERT INTO users (username, email, password, salt, private_key) VALUES "
+                "(?, ?, ?, ?, ?)",
+                (username, email, password, salt, private_key))
             self.connection.commit()
             return True
         except sqlite3.IntegrityError:

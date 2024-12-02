@@ -2,10 +2,12 @@ import os
 import re
 import logging
 import base64
+import subprocess
 
+from datetime import datetime
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat._oid import NameOID
+from cryptography.x509.oid import NameOID
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes, serialization
@@ -99,10 +101,10 @@ def serialize_private_key(private_key):
     return serialized_private_key.decode("utf-8")
 
 
-def serialize_public_key(public_key):
-    # Serializar la clave pública
-    return public_key.public_bytes(encoding = serialization.Encoding.PEM,
-    format = serialization.PublicFormat.SubjectPublicKeyInfo)
+# def serialize_public_key(public_key):
+#     # Serializar la clave pública
+#     return public_key.public_bytes(encoding = serialization.Encoding.PEM,
+#     format = serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
 def decrypt_private_key(encrypted_private_key, password, salt):
@@ -134,13 +136,13 @@ def deserialize_private_key(serialized_private_key):
     return private_key
 
 
-def deserialize_public_key(serialized_public_key):
-    # Deserializar la clave pública
-    public_key = serialization.load_pem_public_key(
-        serialized_public_key,
-        backend=default_backend()
-    )
-    return public_key
+# def deserialize_public_key(serialized_public_key):
+#     # Deserializar la clave pública
+#     public_key = serialization.load_pem_public_key(
+#         serialized_public_key,
+#         backend=default_backend()
+#     )
+#     return public_key
 
 
 def encrypt_aes_message(message, aes_key):
@@ -238,174 +240,101 @@ def check_messages(conversations, username, private_key):
                     good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
     return good_messages
 
-############################################## ENTREGA 2 ######################################################
-# TODO A parte de los demas todos, hay que tener en cuenta el cómo autofirmar un certificado
 
-# TODO eliminar estas funciones
-def create_petition(public_key):
-    return public_key
-
-def get_public_key(route):
-    return route
-
-                        # FUNCIONES AUXILIARES PARA LA REPRESENTACIÓN DE LOS CERTIFICADOS
-
-# Esta función lee todos los certificados y devuelve una lista de diccionarios con los certificados y requests
-def read_all_certificates_as_dict(filename):
-    cert_list = []
-    with open(filename, "r") as file:
-        for line in file:
-            entry = get_parts_as_dict(line)
-            cert_list.append(entry)
-    return cert_list
-
-# Esta función recibe una línea de index y la divide en un diccionario
-def get_parts_as_dict(line):
-    parts = line.strip().split(", ")
-    return {"index": int(parts[0]), "route": parts[1], "verification": bool(parts[2])}
-
-# Esta función devuelve la línea de un certificado en especifico que se encuentra en index
-def read_certificate_from_index(index):
-    filename = "../AC/index.txt"
-    with open(filename, 'r') as file:
-        for line in file:
-            if line.startswith(f'"{index:04d}"'):
-                line.strip()
-                return line
-    return False
-
-
-                        # FUNCIONES PARA LA CREACIÓN DE UN CERTIFICADO
-
-#TODO renombrar a create_petition cuando esté terminado.
-# Deben estar los valores "clave publica del usuario", "fecha de inicio", "fecha de expiración", "entidad superior" (default = False)
-# Renombrar los valores dichos anteriormente para mayor claridad
-# Aquí NO se necesita la private_key del usuario. Necesitamos la private key del AC para firmar el certificado.
-def create_request(username, date, public_key, private_key):
-    csr_builder = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, username),
+def create_request(username, public_key, private_key):
+    # Crear una solicitud de certificado
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, username)
     ])).add_extension(
         x509.SubjectKeyIdentifier.from_public_key(public_key),
         critical=False
-    ).add_extension(
-        x509.UnrecognizedExtension(
-            x509.ObjectIdentifier("1.3.6.1.4.1.343.1.1"),  # OID personalizado
-            date.encode("utf-8")),
-        critical=False
     )
-    csr = csr_builder.sign(private_key, hashes.SHA256())
-    index = get_serial() + 1
-    route = f"../AC/requests/{index:04d}.pem"
+
+    csr = csr.sign(private_key, hashes.SHA256())
+
+    route = f"AC/solicitudes/{username}.pem"
+
     with open(route, "wb") as f:
         f.write(csr.public_bytes(serialization.Encoding.PEM))
-    update_serial(index)
-    add_certificate_to_index(index, route)
-    return index
-
-# Función para obtener el número de certificados y peticiones
-def get_serial():
-    filename = "../AC/serial.txt"
-    try:
-        with open(filename, "r") as file:
-            last_serial = int(file.read())
-            return last_serial
-    except (ValueError, FileNotFoundError):
-        return f"{0:04d}"
-
-# Función para actualizar el número de certificados y peticiones
-def update_serial(index):
-    filename = "../AC/serial.txt"
-    with open(filename, "w") as file:
-        file.write(f"{index:04d}")
-
-# Función para añadir un certificado al index. Ejemplo: "0001, ../AC/requests/0001.pem, False"
-def add_certificate_to_index(index, route, verification = False):
-    filename = "../AC/index.txt"
-    certificate_string = f"{index:04d}, {route}, {verification}\n"
-    with open(filename, "a") as file:
-        file.write(certificate_string)
 
 
-                        # FUNCIONES PARA LA OBTENCIÓN DE UNA PUBLIC KEY
+def get_certificate_index(username, check_status):
+    # Obtener el índice del certificado de un usuario desde index.txt
+    with open("AC/index.txt", "r") as file:
+        for line in file:
+            fields = get_parts_as_dict(line)
+            if fields != None:
+                if fields["username"] == username:
+                    if check_status:
+                        if fields["status"] == "V":
+                            return fields["index"]
+                    else:
+                        return fields["index"]
+    return None
 
-#TODO renombrar a get_public_key cuando esté terminado.
-def get_public_key_from_certificate(index):
-    route = get_parts_as_dict((read_certificate_from_index(index)))[1]
-    certificate = open_certificate(route)
-    if verify_cerificate(index):
-        return certificate.public_key()
+
+def get_parts_as_dict(line):
+    # Obtener los campos de una línea de index.txt como un diccionario
+    parts = line.strip().split()
+
+    if len(parts) == 5:
+        # Certificado válido
+        return {"status": parts[0],"expiration_date": parts[1],"index": parts[2],"route": parts[3],"username": parts[4].split("=")[1]}
+    elif len(parts) == 6:
+        # Certificado revocado
+        return {"status": parts[0],"revocation_date": parts[1], "expiration_date": parts[2], "index": parts[3],"route": parts[4], "username": parts[5].split("=")[1]}
+    else:
+        # Si la línea no tiene el formato esperado
+        return None
+
+
+def open_certificate(cert_path):
+    # Función para abrir un certificado y leer sus datos
+    with open(cert_path, "rb") as f:
+        cert_data = f.read()
+    return x509.load_pem_x509_certificate(cert_data, default_backend())
+
+def verify_certificate(cert_path):
+    # Verificar la validez de un certificado
+    user_cert = open_certificate(cert_path)
+
+    if verify_signature(user_cert) and verify_validity(user_cert):
+        return True
     return False
 
-# Función para abrir un certificado y leer sus datos
-def open_certificate(certificate):
-    with open(certificate, "rb") as file:
-        return x509.load_pem_x509_certificate(file.read())
+def verify_signature(cert):
+    # Veificar la firma del certificado
+    ca_cert = open_certificate("AC/ac1cert.pem")
 
-# Función para verificar la firma de un certificado.
-# TODO 1. Comprobar que el certificado está entre los tiempos límites (no antes y no después)
-#  2. Comprobar que el certificado superior también está validado por su superior
-#  3. Necesitamos el propio certificado y la public key del AC.
-def verify_cerificate(index):
     try:
-        # Cargar el certificado
-        certificate_parameters = get_parts_as_dict((read_certificate_from_index(index)))
-
-        # Obtener los datos firmados del certificado (TBS = "To Be Signed")
-        certificate = open_certificate(certificate_parameters[1])
-
-        # Obtener los datos To Be Signed y la firma
-        tbs_cert = certificate.tbs_certificate_bytes
-        signature = certificate.signature
-
-        # Conseguimos la clave pública de AC
-        ca_public_key = get_AC_public_key()
-
-        # Verificar la firma con la clave pública de la AC
-        ca_public_key.verify(
-            signature,
-            tbs_cert,
-            padding.PKCS1v15(),  # Esquema de padding para RSA
-            certificate.signature_hash_algorithm
+        ca_cert.public_key().verify(
+            cert.signature,
+            cert.tbs_certificate_bytes,
+            padding.PKCS1v15(),
+            hashes.SHA256()
         )
-
-        # Si la verificación es exitosa, actualizamos el índice
-        update_certificate_in_index(index, certificate_parameters[1], True)
         return True
-
-    except Exception as e:
-        print(f"Error en la verificación: {e}")
+    except InvalidSignature:
         return False
+    
 
-def get_AC_public_key():
-    Users_table = Users()
-    AC = Users_table.check_user("USUARIO AC")
-    return get_public_key_from_certificate(AC)
+def verify_validity(cert):
+    # Comprobar si el certificado está dentro de su periodo de validez
+    current_time = datetime.now()
+    if cert.not_valid_before <= current_time <= cert.not_valid_after:
+        return True
+    return False
 
 
-                        # FUNCIONES PARA FIRMAR UNA PETICIÓN
+def get_public_key_from_certificate(cert_path):
+    # Obtener la clave pública de un certificado
+    cert = open_certificate(cert_path)
+    return cert.public_key()
 
-# Función para firmar una petición
-# TODO Recuerda actualizar el index: verification = True y cambiar la ruta del archivo (de requests a newcerts...?)
-# Para firmar necesitamos únicamente la private key del AC
-def sign_petition(certificate, AC_private_key):
-    return
 
-# Función para actualizar un certificado en el inex
-def update_certificate_in_index(index, route, verification):
-    filename = "../AC/index.txt"
-
-    with open(filename, 'w') as file:
-        for line in file:
-            if line.startswith(f'"{index:04d}"'):
-                #TODO está bien escrito así? Es necesario "\n"?
-                new_line = f'"{index:04d}, {route}, {verification}\n"'
-                file.write(new_line)
-            else:
-                file.write(line)
-
-# Función para conseguir las clave privada de un usuario de AC
-#TODO Recuerda que la clave privada no es así como tal
-def get_AC_private_key():
-    Users_table = Users()
-    AC = Users_table.check_user("USUARIO AC")
-    return
+def get_public_key_from_request(request_path):
+    # Obtener la clave pública de una solicitud de certificado
+    with open(request_path, "rb") as f:
+        csr_data  = f.read()
+    csr = x509.load_pem_x509_csr(csr_data , default_backend())
+    return csr.public_key()

@@ -31,6 +31,30 @@ Para poder ver e interactuar correctamente, debemos abrir en un navegador (si qu
 http://127.0.0.1:5000
 
 
+### Inicio de Sesión
+
+Algunos perfiles preconfigurados son:
+
+Perfil de admin:
+    Usuario: jorge
+    Contraseña: Prueba1?
+
+Perfil de cliente:
+    -Usuario: prueba1
+    -Contraseña: Prueba1?
+
+### Creación de certificados
+
+Si se desea aceptar una solicitud de certificado, se puede hacer ejecutando desde una terminal de linux:
+
+```bash
+cd AC
+./aprobar_solicitudes
+```
+
+Contraseña de ca para aceptar solicitudes: cripto
+
+
 # Autores 
 
 Este proyecto ha sido realizado por:
