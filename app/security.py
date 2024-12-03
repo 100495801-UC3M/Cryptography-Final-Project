@@ -2,8 +2,8 @@ import os
 import re
 import logging
 import base64
-import subprocess
 
+from app.users import Users
 from datetime import datetime
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -100,12 +100,6 @@ def serialize_private_key(private_key):
     return serialized_private_key.decode("utf-8")
 
 
-# def serialize_public_key(public_key):
-#     # Serializar la clave pública
-#     return public_key.public_bytes(encoding = serialization.Encoding.PEM,
-#     format = serialization.PublicFormat.SubjectPublicKeyInfo)
-
-
 def decrypt_private_key(encrypted_private_key, password, salt):
     # Derivar la clave para descifrar
     kdf = PBKDF2HMAC(
@@ -133,15 +127,6 @@ def deserialize_private_key(serialized_private_key):
         password=None
     )
     return private_key
-
-
-# def deserialize_public_key(serialized_public_key):
-#     # Deserializar la clave pública
-#     public_key = serialization.load_pem_public_key(
-#         serialized_public_key,
-#         backend=default_backend()
-#     )
-#     return public_key
 
 
 def encrypt_aes_message(message, aes_key):
@@ -191,7 +176,6 @@ def verify_hmac(aes_key, encrypted_message, hmac_label_received):
         return False
 
 
-
 def encrypt_aes_rsa_key(aes_key, public_key):
     # Cifrar la clave AES usando la clave pública
     encrypted_aes_key = public_key.encrypt(
@@ -223,31 +207,36 @@ def decrypt_aes_rsa_key(encrypted_aes_key, private_key):
 def check_messages(conversations, username, username_public_key, username_private_key):
     # Verificar si los mensajes se puden descifrar con la clave privada y devolver los que si se han podido
     good_messages = []
+
     for message in conversations:
-            if message["sender"] == username:
-                try:
-                    aes = decrypt_aes_rsa_key(message["aes_key_sender"], username_private_key)
-                    public_key = username_public_key
-                except:
+        if message["sender"] == username:
+            try:
+                aes = decrypt_aes_rsa_key(message["aes_key_sender"], username_private_key)
+                sender_public_key = username_public_key
+            except:
+                return "error"
+        else:
+            try:
+                aes = decrypt_aes_rsa_key(message["aes_key_receiver"], username_private_key)
+                users_db = Users(db_name="./db/users.db")
+                user = users_db.check_user(message["sender"])
+
+                route = user["certificate"]
+
+                if route == "" or route is None:
                     return "error"
-            else:
-                try:
-                    aes = decrypt_aes_rsa_key(message["aes_key_receiver"], username_private_key)
-                    index = get_certificate_index(message["sender"], False)
-                    if index == None:
-                        route = "AC/solicitudes/" + message["sender"] + ".pem"
-                        public_key = get_public_key_from_request(route)
-                    else:
-                        route = "AC/nuevoscerts/" + index + ".pem"
-                        public_key = get_public_key_from_certificate(route)
-                except:
-                    return "error"
-            message_to_verify = message["text"] + message["hmac"]
-            if verify_message(message_to_verify, message["signature"], public_key):
-                if verify_hmac(aes, message["text"], message["hmac"]):
-                    message_decrypted = decrypt_message(message["text"], aes)
-                    good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
-                    logging.info(f"La firma del mensaje ha sido verificada correctamente")
+                else:
+                    sender_public_key = get_public_key_from_certificate(route)
+            except:
+                
+                return "error"
+        
+        if verify_message(message["text"], message["hmac"], message["signature"], sender_public_key):
+            if verify_hmac(aes, message["text"], message["hmac"]):
+                message_decrypted = decrypt_message(message["text"], aes)
+                good_messages.append([message["id"], message["sender"], message_decrypted, message["datehour"]])
+                logging.info(f"La firma del mensaje ha sido verificada correctamente")
+
     return good_messages
 
 
@@ -304,13 +293,16 @@ def open_certificate(cert_path):
         cert_data = f.read()
     return x509.load_pem_x509_certificate(cert_data, default_backend())
 
+
 def verify_certificate(cert_path):
     # Verificar la validez de un certificado
+    cert_path = "AC/nuevoscerts/" + cert_path + ".pem"
     user_cert = open_certificate(cert_path)
 
     if verify_signature(user_cert) and verify_validity(user_cert):
         return True
     return False
+
 
 def verify_signature(cert):
     # Veificar la firma del certificado
@@ -318,10 +310,10 @@ def verify_signature(cert):
 
     try:
         ca_cert.public_key().verify(
-            cert.signature,
-            cert.tbs_certificate_bytes,
-            padding.PKCS1v15(),
-            hashes.SHA256()
+            signature=cert.signature,
+            data=cert.tbs_certificate_bytes,
+            padding=padding.PKCS1v15(),
+            algorithm=cert.signature_hash_algorithm
         )
         return True
     except InvalidSignature:
@@ -338,6 +330,7 @@ def verify_validity(cert):
 
 def get_public_key_from_certificate(cert_path):
     # Obtener la clave pública de un certificado
+    cert_path = "./AC/nuevoscerts/" + cert_path + ".pem"
     cert = open_certificate(cert_path)
     return cert.public_key()
 
@@ -349,8 +342,10 @@ def get_public_key_from_request(request_path):
     csr = x509.load_pem_x509_csr(csr_data , default_backend())
     return csr.public_key()
 
-                        # PARA FIRMAR
-def sign_message(message, sender_private_key):
+
+def sign_message(encryped_message, hmac, sender_private_key):
+    # Firmar el mensaje con la clave privada del emisor
+    message = encryped_message + hmac 
     signature = sender_private_key.sign(
         message,
         padding.PSS(
@@ -363,7 +358,11 @@ def sign_message(message, sender_private_key):
     # puede que no lo encuentres rápidamente. Recomendable usar CNTRL + F y buscar "chacha256" en la terminal.
     logging.info(f"La firma del mensaje: {message.hex()} ha sido creada con ChaCha256")
     return signature
-def verify_message(message, signature, public_key):
+
+
+def verify_message(encryped_message, hmac, signature, public_key):
+    # Verificar la firma del mensaje
+    message = encryped_message + hmac 
     try:
         public_key.verify(
             signature,

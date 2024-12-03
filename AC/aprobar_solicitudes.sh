@@ -15,6 +15,7 @@ if [ ! -f "$CSR_PATH" ]; then
     exit 1
 fi
 
+
 # Obtener el índice del certificado en index.txt
 INDEX=$(grep -w "CN=$USERNAME" "$DIR/index.txt" | awk '{if ($1 == "V") print $3}')
 
@@ -33,11 +34,20 @@ if [ -n "$INDEX" ]; then
 fi
 
 
+# Leer el contenido de serial para obtener el número que toca
+if [ -f "$DIR/serial" ]; then
+    SERIAL=$(cat "$DIR/serial")
+else
+    echo "El archivo serial no existe."
+    exit 1
+fi
+
+
 # Aprobar la solicitud
 openssl ca -in "$CSR_PATH" -days 365 -config openssl.cnf
 
 # Codigo extra para pobrar la fecha la caducidad
-# openssl ca -in "$CSR_PATH" -startdate "20241202100100Z" -enddate "20241202104400Z" -config openssl.cnf
+# openssl ca -in "$CSR_PATH" -startdate "20241202100100Z" -enddate "20241203181200Z" -config openssl.cnf
 
 
 if [ $? -ne 0 ]; then
@@ -45,6 +55,18 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "✅ Certificado generado"
+
+
+# Actualizar la base de datos del usuario
+DB_DIR="../app/users.py"
+
+if [ ! -f "$DB_DIR" ]; then
+    echo "El archivo $DB_DIR no existe."
+    exit 1
+fi
+
+python3 "$DB_DIR" "$USERNAME" "$SERIAL"
+
 
 # Eliminar archivos innecesarios
 if [ -f "$DIR/index.txt.old" ]; then

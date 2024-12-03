@@ -1,3 +1,4 @@
+import sys
 import sqlite3
 
 class Users:
@@ -17,33 +18,33 @@ class Users:
                 password TEXT NOT NULL,
                 role TEXT DEFAULT "client",
                 salt TEXT NOT NULL,
-                private_key TEXT)''')
+                private_key TEXT,
+                certificate TEXT)''')
         self.connection.commit()
 
-    # def add_user(self, username, email, password, salt, private_key):
-    #     # Añadir nuevo admin a la base de datos
-    #     try:
-    #         self.cursor.execute(
-    #             "INSERT INTO users (username, email, password, role, salt, private_key) VALUES "
-    #             "(?, ?, ?, ?, ?, ?)",
-    #             (username, email, password, "admin", salt, private_key))
-    #         self.connection.commit()
-    #         return True
-    #     except sqlite3.IntegrityError:
-    #         return False
-        
-
     def add_user(self, username, email, password, salt, private_key):
-        # Añadir nuevo usuario a la base de datos
+        # Añadir nuevo admin a la base de datos
         try:
             self.cursor.execute(
-                "INSERT INTO users (username, email, password, salt, private_key) VALUES "
-                "(?, ?, ?, ?, ?)",
-                (username, email, password, salt, private_key))
+                "INSERT INTO users (username, email, password, role, salt, private_key) VALUES "
+                "(?, ?, ?, ?, ?, ?)",
+                (username, email, password, "admin", salt, private_key))
             self.connection.commit()
             return True
         except sqlite3.IntegrityError:
             return False
+
+    # def add_user(self, username, email, password, salt, private_key):
+    #     # Añadir nuevo usuario a la base de datos
+    #     try:
+    #         self.cursor.execute(
+    #             "INSERT INTO users (username, email, password, salt, private_key) VALUES "
+    #             "(?, ?, ?, ?, ?)",
+    #             (username, email, password, salt, private_key))
+    #         self.connection.commit()
+    #         return True
+    #     except sqlite3.IntegrityError:
+    #         return False
 
     def check_user(self, username_or_email):
         # Buscar usuario por nombre de usuario o email
@@ -74,3 +75,15 @@ class Users:
         # Ascender a admin a un usuario
         self.cursor.execute("UPDATE users SET role='admin' WHERE username=?", (username,))
         self.connection.commit()
+
+    def update_certificate(self, username, certificate):
+        # Actualizar certificado
+        self.cursor.execute("UPDATE users SET certificate=? WHERE username=?", (certificate, username))
+        self.connection.commit()
+
+
+if __name__ == "__main__":
+    username = sys.argv[1]
+    certificate = sys.argv[2]
+    users = Users(db_name="../db/users.db")
+    users.update_certificate(username, certificate)

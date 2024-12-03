@@ -39,17 +39,20 @@ def register():
     # Ruta de registro de usuario
     if "username" in session:
         return redirect(url_for("home"))
+    
     if request.method == "POST":
         username = request.form["username"].strip().lower()
         email = request.form["email"].strip().lower()
         password = request.form["password"]
         password2 = request.form["password2"]
+
         if not security.check_password(password):
             error = ("La contraseña es inválida. Debe tener al menos 6 "
                      "caracteres, una mayúscula, una minúscula, un número y "
                      "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
                      "espacios.")
             return render_template("register.html", error=error)
+        
         if password != password2:
             error = "Las contraseñas no coinciden"
             return render_template("register.html", error=error)
@@ -65,7 +68,6 @@ def register():
 
         result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), private_key)
 
-
         if result:
             logging.info(f"Usuario {username} registrado exitosamente.")
             return redirect(url_for("login"))
@@ -73,6 +75,7 @@ def register():
             logging.error(f"Error en el registro de {username}. El usuario o el email ya están registrados.")
             error = "Usuario o email ya registrados"
             return render_template("register.html", error=error)
+    
     return render_template("register.html")
 
 
@@ -82,18 +85,22 @@ def login():
     # Ruta de inicio de sesión
     if "username" in session:
         return redirect(url_for("home"))
+    
     if request.method == "POST":
         if request.form.get("form_id") == "loginForm":
             username_or_email = request.form["username_or_email"].lower()
             password = request.form["password"]
             user = users_db.check_user(username_or_email)
+
             if user is not False:
                 stored_password = user["password"]
                 salt = base64.urlsafe_b64decode(user["salt"])
+
                 if security.verify_password(stored_password, salt, password):
-                    index = security.get_certificate_index(user["username"], True)
-                    if index != None:
-                        route = "AC/nuevoscerts/" + index + ".pem"
+                    route = user["certificate"]
+
+                    if route != "" and route is not None:
+
                         if security.verify_certificate(route):
                             session["username"] = user["username"]
                             session["role"] = user["role"]
@@ -105,10 +112,10 @@ def login():
                             logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
                             return redirect(url_for("home"))
                         else:
-                            route = "AC/nuevoscerts/" + index + ".pem"
                             public_key = security.get_public_key_from_certificate(route)
                             private_key = security.decrypt_private_key(user["private_key"], password, salt)
                             security.create_request(user["username"], public_key , private_key)
+
                             logging.error(f"Certificado alterado o caducado para {username_or_email}.")
                             error = "Ha habido un error con su certificado, debe esperar a que sea aprobado en el sistema nuevamente"
                             return render_template("login.html", error=error)
@@ -141,8 +148,8 @@ def home():
         private_key = security.deserialize_private_key(session["private_key"])
         message = messages_db.get_message(int(person[0]))
 
-        index_username = security.get_certificate_index(session["username"], False)
-        route = "AC/nuevoscerts/" + index_username + ".pem"
+        user  = users_db.check_user(session["username"])
+        route = user["certificate"]
         public_key = security.get_public_key_from_certificate(route)
 
         last_message = security.check_messages(message, session["username"], public_key, private_key)
@@ -153,14 +160,15 @@ def home():
         if "search_form" in request.form:
             user_searched_input = request.form["user_searched"]
             user_searched_data = users_db.check_user(user_searched_input)
+
             if user_searched_data:
                 session["found"] = True
                 session["user_searched"] = user_searched_data["username"]
                 conversations = messages_db.conversations(session["username"], session["user_searched"])
                 private_key = security.deserialize_private_key(session["private_key"])
 
-                index_username = security.get_certificate_index(session["username"], False)
-                route = "AC/nuevoscerts/" + index_username + ".pem"
+                user = users_db.check_user(session["username"])
+                route = user["certificate"]
                 public_key = security.get_public_key_from_certificate(route)
 
                 good_messages = security.check_messages(conversations, session["username"], public_key, private_key)
@@ -177,17 +185,20 @@ def home():
             user_searched = session.get("user_searched")
             if user_searched:
                 receiver = users_db.check_user(user_searched)
-                index_receiver= security.get_certificate_index(receiver["username"], False)
-                if index_receiver == None:
-                    route = "AC/solicitudes/" + receiver["username"] + ".pem"
-                    receiver_public_key = security.get_public_key_from_request(route)
+                route = receiver["certificate"]
+
+                if route != "" and route is not None:
+                    if security.verify_certificate(route):
+                        receiver_public_key = security.get_public_key_from_certificate(route)
+                    else:
+                        error = "El certificado del usuario al que intenta ennviar el mensaje no es válido"
+                        return render_template("home.html", list_conversations = list, role=session["role"], error=error)
                 else:
-                    route = "AC/nuevoscerts/" + index_receiver + ".pem"
-                    receiver_public_key = security.get_public_key_from_certificate(route)
+                    error = "El certificado del usuario al que intenta ennviar el mensaje no es válido"
+                    return render_template("home.html", list_conversations = list, role=session["role"], error=error)
 
                 sender = users_db.check_user(session["username"])
-                index_sender = security.get_certificate_index(sender["username"], False)
-                route = "AC/nuevoscerts/" + index_sender + ".pem"
+                route = sender["certificate"]
                 sender_public_key = security.get_public_key_from_certificate(route)
 
                 aes_key = security.generate_salt_aes("aes", 32)
@@ -195,11 +206,12 @@ def home():
                 hmac = security.generate_hmac(aes_key, encrypted_message)
 
                 sender_private_key = security.deserialize_private_key(session["private_key"])
-                message_to_sign = encrypted_message + hmac
-                signature = security.sign_message(message_to_sign, sender_private_key)
+                
+                signature = security.sign_message(encrypted_message, hmac, sender_private_key)
 
                 encrypted_aes_key_sender = security.encrypt_aes_rsa_key(aes_key, sender_public_key)
                 encrypted_aes_key_receiver = security.encrypt_aes_rsa_key(aes_key, receiver_public_key)
+
                 if messages_db.send_message(session["username"], user_searched, encrypted_message, hmac, encrypted_aes_key_sender, encrypted_aes_key_receiver, signature):
                     conversations = messages_db.conversations(session["username"], user_searched)
                     good_messages = security.check_messages(conversations, session["username"], sender_public_key, sender_private_key)
@@ -217,8 +229,9 @@ def home():
         conversations = messages_db.conversations(session["username"], session.get("user_searched"))
         private_key = security.deserialize_private_key(session["private_key"])
 
-        index_username = security.get_certificate_index(session["username"], False)
-        route = "AC/nuevoscerts/" + index_username + ".pem"
+        user = users_db.check_user(session["username"])
+        route = user["certificate"]
+
         public_key = security.get_public_key_from_certificate(route)
 
         good_messages = security.check_messages(conversations, session["username"], public_key, private_key)
@@ -227,6 +240,7 @@ def home():
     user_searched = session.get("user_searched")
     conversations = session.get("conversations")
     found = session.get("found")
+
     return render_template("home.html", list_conversations = list, username=session["username"], role=session["role"], conversations=conversations, found=found, user_searched=user_searched)
 
 
@@ -236,8 +250,10 @@ def list_users():
     # Ruta de lista de usuarios
     if "username" not in session:
         abort(404)
+    
     if session["role"] != "admin":
         abort(404)
+    
     if request.method == "POST" and "delete" in request.form:
         user_deleted = request.form.get("username")
         messages_db.remove_messages(user_deleted)
@@ -247,7 +263,9 @@ def list_users():
     if request.method == "POST" and "promote" in request.form:
         user_promoted = request.form.get("username")
         users_db.promote_user(user_promoted)
+    
     users = users_db.list_users()
+
     return render_template("users.html", users=users)
 
 
@@ -257,27 +275,34 @@ def list_messages():
     # Ruta de lista de mensajes
     if "username" not in session:
         abort(404)
+    
     if session["role"] != "admin":
         abort(404)
+    
     messages = messages_db.list_messages()
     messages_list = []
+
     for m in messages:
         messages_list.append(dict(m))
+    
     if request.method == "POST":
         message_id = request.form.get("id")
         message = messages_db.get_message(message_id)
         private_key = security.deserialize_private_key(session["private_key"])
 
-        index_username = security.get_certificate_index(session["username"], False)
-        route = "AC/nuevoscerts/" + index_username + ".pem"
+        user = users_db.check_user(session["username"])
+        route = user["certificate"]
         public_key = security.get_public_key_from_certificate(route)
 
         message = security.check_messages(message, session["username"], public_key, private_key)
+
         if message != "error":
             for m in messages_list:
                 if int(m["id"]) == int(message_id):
                     m["text"] = message[0][2]
+        
         return render_template("messages.html", messages=messages_list)
+    
     return render_template("messages.html", messages=messages_list)
 
 
@@ -290,27 +315,33 @@ def profile():
     else:
         user = users_db.check_user(session["username"])
         username = user["username"]
+
         if request.method == "POST" and "change_password" in request.form:
             password = request.form["password"]
             new_password = request.form["new_password"]
             new_password2 = request.form["new_password2"]
             stored_password = user["password"]
             salt = base64.urlsafe_b64decode(user["salt"])
+
             if not security.verify_password(stored_password, salt, password):
                 error = "La contraseña no es correcta"
                 return render_template("profile.html", username=username, error=error)
+            
             if not security.check_password(new_password):
                 error = ("La contraseña es inválida. Debe tener al menos 6 "
                         "caracteres, una mayúscula, una minúscula, un número y "
                         "un carácter especial ($!%*?&_¿@#=-). No puede incluir "
                         "espacios.")
                 return render_template("profile.html", username=username, error=error)
+            
             if new_password != new_password2:
                 error = "Las contraseñas no coinciden"
                 return render_template("profile.html", username=username, error=error)
+            
             hashed_password = security.hash(new_password, salt)
             users_db.update_password(username, hashed_password)
             success = "Las contraseña ha sido actualizada correctamente"
+
             return render_template("profile.html", username=username, success=success)
         
         if request.method == "POST" and "delete_account" in request.form:
@@ -318,6 +349,7 @@ def profile():
             users_db.remove_user(session["username"])
             session.clear()
             return redirect(url_for("index"))
+        
         return render_template("profile.html", username=username)
 
 
@@ -333,4 +365,5 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(ssl_context=("cert.pem", "key.pem"), debug=True)
+    # app.run(debug=True)
