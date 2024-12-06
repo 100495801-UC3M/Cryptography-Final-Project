@@ -34,18 +34,6 @@ class Users:
         except sqlite3.IntegrityError:
             return False
 
-    # def add_user(self, username, email, password, salt, private_key):
-    #     # Añadir nuevo usuario a la base de datos
-    #     try:
-    #         self.cursor.execute(
-    #             "INSERT INTO users (username, email, password, salt, private_key) VALUES "
-    #             "(?, ?, ?, ?, ?)",
-    #             (username, email, password, salt, private_key))
-    #         self.connection.commit()
-    #         return True
-    #     except sqlite3.IntegrityError:
-    #         return False
-
     def check_user(self, username_or_email):
         # Buscar usuario por nombre de usuario o email
         user = self.cursor.execute(

@@ -16,6 +16,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
 
 
+
+
 def check_password(password):
     # Revisar si la contraseña cumple con los requisitos mínimos
     if " " in password:
@@ -53,11 +55,22 @@ def hash(password, salt):
                     f"Contraseña_Hash: {password_hash}")
     return password_hash
 
-
 def verify_password(stored_password, salt, provided_password):
-    # Verificar si la contraseña introducida hasheada con el salt es igual a la guardada
-    provided_password_hash = hash(provided_password, salt)
-    return provided_password_hash == stored_password
+    # Crear el KDF (Key Derivation Function) con los mismos parámetros que el hash original
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+
+    try:
+        # Verificar si el hash derivado coincide con el almacenado
+        derived_hash = kdf.derive(provided_password.encode())
+        return base64.urlsafe_b64encode(derived_hash) == stored_password
+    except Exception:
+        return False
 
 
 def generate_keys():
@@ -208,6 +221,7 @@ def check_messages(conversations, username, username_public_key, username_privat
     # Verificar si los mensajes se puden descifrar con la clave privada y devolver los que si se han podido
     good_messages = []
 
+    # Conseguir por cada mensaje la clave AES descifrada y la clave pública de quien ha enviado el mensaje
     for message in conversations:
         if message["sender"] == username:
             try:
@@ -230,7 +244,8 @@ def check_messages(conversations, username, username_public_key, username_privat
             except:
                 
                 return "error"
-        
+
+        # Verificar el mensaje tanto por la firma con la clave pública como por el hmac. Proporciona integridad, autenticidad y confidencialidad
         if verify_message(message["text"], message["hmac"], message["signature"], sender_public_key):
             if verify_hmac(aes, message["text"], message["hmac"]):
                 message_decrypted = decrypt_message(message["text"], aes)
@@ -372,7 +387,6 @@ def verify_message(encryped_message, hmac, signature, public_key):
                 salt_length=padding.PSS.MAX_LENGTH
             ),
             hashes.SHA256())
-
         return True
     except:
         return False

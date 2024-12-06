@@ -39,13 +39,15 @@ def register():
     # Ruta de registro de usuario
     if "username" in session:
         return redirect(url_for("home"))
-    
+
+    # Al recibir el cuestionario
     if request.method == "POST":
         username = request.form["username"].strip().lower()
         email = request.form["email"].strip().lower()
         password = request.form["password"]
         password2 = request.form["password2"]
 
+        # Comprueba que la contraseña es segura
         if not security.check_password(password):
             error = ("La contraseña es inválida. Debe tener al menos 6 "
                      "caracteres, una mayúscula, una minúscula, un número y "
@@ -56,16 +58,21 @@ def register():
         if password != password2:
             error = "Las contraseñas no coinciden"
             return render_template("register.html", error=error)
-        
+
+        # Genera un salt para la contraseña y el hash de dicha contraseña
         salt = security.generate_salt_aes("salt", 16)
         hashed_password = security.hash(password, salt)
 
+        # Genera la clave púlica y privada
         private_key, public_key = security.generate_keys()
 
+        # La clave pública se guarda en un request para que pueda ser aceptado posteriormente
         security.create_request(username, public_key, private_key)
 
+        # La clave privada es encriptada con la contraseña y el salt
         private_key = security.encrypt_private_key(private_key, password, salt)
 
+        # Guarda en la base de datos los datos del registro
         result = users_db.add_user(username, email, hashed_password, base64.urlsafe_b64encode(salt), private_key)
 
         if result:
@@ -85,33 +92,35 @@ def login():
     # Ruta de inicio de sesión
     if "username" in session:
         return redirect(url_for("home"))
-    
+
+    # Al recibir el cuestionario
     if request.method == "POST":
         if request.form.get("form_id") == "loginForm":
+            # Recibe los datos del cuestionario y comprueba si el usuario está registrado
             username_or_email = request.form["username_or_email"].lower()
             password = request.form["password"]
             user = users_db.check_user(username_or_email)
 
             if user is not False:
+                # Recupera el salt y verifica si la contraseña es correcta
                 stored_password = user["password"]
                 salt = base64.urlsafe_b64decode(user["salt"])
-
                 if security.verify_password(stored_password, salt, password):
+                    # Si es correcta, recupera el certificado (si es que fue verificado) y se guardan los datos
                     route = user["certificate"]
-
                     if route != "" and route is not None:
-
                         if security.verify_certificate(route):
                             session["username"] = user["username"]
                             session["role"] = user["role"]
                             private_key = security.decrypt_private_key(user["private_key"], password, salt)
+                            # Serializamos la private key para mayor seguridad
                             private_key = security.serialize_private_key(private_key)
-
                             session["private_key"] = private_key
                             session.permanent = True
                             logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
                             return redirect(url_for("home"))
                         else:
+                            # Si el certificado ha sido revocado, crea un nuevo request con los mismos datos
                             public_key = security.get_public_key_from_certificate(route)
                             private_key = security.decrypt_private_key(user["private_key"], password, salt)
                             security.create_request(user["username"], public_key , private_key)
@@ -120,14 +129,17 @@ def login():
                             error = "Ha habido un error con su certificado, debe esperar a que sea aprobado en el sistema nuevamente"
                             return render_template("login.html", error=error)
                     else:
+                        # Si directamente no existe una ruta para acceder al certificado
                         logging.error(f"Certificado en espera o no aceptado para {username_or_email}.")
                         error = "Debe esperar a que sea aprobado en el sistema"
                         return render_template("login.html", error=error)
                 else:
+                    # Si los datos de contraseña son incorrectos
                     logging.error(f"Intento fallido de inicio de sesión para {username_or_email}.")
                     error = "Usuario o contraseña incorrectos o la cuenta no existe"
                     return render_template("login.html", error=error)
             else:
+                # Si los datos de usuario son incorrectos (exactamente el mismo mensaje que para la contraseña)
                 logging.error(f"Intento fallido de inicio de sesión para {username_or_email}.")
                 error = "Usuario o contraseña incorrectos o la cuenta no existe"
                 return render_template("login.html", error=error)
@@ -142,6 +154,7 @@ def home():
     if "username" not in session:
         return redirect(url_for("login"))
 
+    # Coger el último mensaje de todas las conversaciones y mostrarlo
     list = []
     list_conversations = messages_db.list_conversations(session["username"])
     for person in list_conversations:
@@ -156,12 +169,14 @@ def home():
         last_message = last_message[0][2]
         list.append([person[1], last_message])
 
+    # Encontrar un usuario en la barra de búsqueda
     if request.method == "POST":
         if "search_form" in request.form:
+            # Comprueba que el usuario está registrado en la base de datos
             user_searched_input = request.form["user_searched"]
             user_searched_data = users_db.check_user(user_searched_input)
-
             if user_searched_data:
+                # Si existe, devolver la conversación con dicho usuario
                 session["found"] = True
                 session["user_searched"] = user_searched_data["username"]
                 conversations = messages_db.conversations(session["username"], session["user_searched"])
@@ -180,6 +195,7 @@ def home():
             
             return redirect(url_for("home"))
 
+        # Para enviar un mensaje a un usuario
         elif "send_message" in request.form:
             message = request.form["message"]
             user_searched = session.get("user_searched")
@@ -187,31 +203,36 @@ def home():
                 receiver = users_db.check_user(user_searched)
                 route = receiver["certificate"]
 
+                # Coge la clave pública del otro usuario
                 if route != "" and route is not None:
                     if security.verify_certificate(route):
                         receiver_public_key = security.get_public_key_from_certificate(route)
                     else:
-                        error = "El certificado del usuario al que intenta ennviar el mensaje no es válido"
+                        error = "El certificado del usuario al que intenta enviar el mensaje no es válido"
                         return render_template("home.html", list_conversations = list, role=session["role"], error=error)
                 else:
-                    error = "El certificado del usuario al que intenta ennviar el mensaje no es válido"
+                    error = "El certificado del usuario al que intenta enviar el mensaje no es válido"
                     return render_template("home.html", list_conversations = list, role=session["role"], error=error)
 
+                # Para enviar un mensaje, se cogen las claves públicas de ambos usuarios
                 sender = users_db.check_user(session["username"])
                 route = sender["certificate"]
                 sender_public_key = security.get_public_key_from_certificate(route)
 
+                # Se crea una clave AES para la confidencialidad.
                 aes_key = security.generate_salt_aes("aes", 32)
                 encrypted_message = security.encrypt_aes_message(message, aes_key)
                 hmac = security.generate_hmac(aes_key, encrypted_message)
 
-                sender_private_key = security.deserialize_private_key(session["private_key"])
-                
-                signature = security.sign_message(encrypted_message, hmac, sender_private_key)
-
+                # Encriptar la clave AES con la clave pública del emisor y receptor
                 encrypted_aes_key_sender = security.encrypt_aes_rsa_key(aes_key, sender_public_key)
                 encrypted_aes_key_receiver = security.encrypt_aes_rsa_key(aes_key, receiver_public_key)
 
+                # Coger la clave privada del usuario para firmar el mensaje
+                sender_private_key = security.deserialize_private_key(session["private_key"])
+                signature = security.sign_message(encrypted_message, hmac, sender_private_key)
+
+                # Enviar el mensaje con ambos usuarios, el mensaje encriptado, hmac, clave aes encriptada por ambas claves públicas y la firma
                 if messages_db.send_message(session["username"], user_searched, encrypted_message, hmac, encrypted_aes_key_sender, encrypted_aes_key_receiver, signature):
                     conversations = messages_db.conversations(session["username"], user_searched)
                     good_messages = security.check_messages(conversations, session["username"], sender_public_key, sender_private_key)
@@ -226,6 +247,7 @@ def home():
             return redirect(url_for("home"))
 
     if session.get("user_searched") is not None:
+        # Escribir en pantalla la conversación con el usuario
         conversations = messages_db.conversations(session["username"], session.get("user_searched"))
         private_key = security.deserialize_private_key(session["private_key"])
 
@@ -244,6 +266,7 @@ def home():
     return render_template("home.html", list_conversations = list, username=session["username"], role=session["role"], conversations=conversations, found=found, user_searched=user_searched)
 
 
+# PÁGINA EXCLUSIVA PARA ADMINS: Acceder a la lista de usuarios
 route = re.sub(r"^(\/).*", r"\1users", route)
 @app.route(route, methods=["GET", "POST"])
 def list_users():
@@ -253,13 +276,15 @@ def list_users():
     
     if session["role"] != "admin":
         abort(404)
-    
+
+    # Función para eliminar un usuario
     if request.method == "POST" and "delete" in request.form:
         user_deleted = request.form.get("username")
         messages_db.remove_messages(user_deleted)
         users_db.remove_user(user_deleted)
         logging.info("El usuario se ha eliminado de la tabla de datos correctamente.")
 
+    # Función para ascender un usuario a Admin
     if request.method == "POST" and "promote" in request.form:
         user_promoted = request.form.get("username")
         users_db.promote_user(user_promoted)
@@ -269,6 +294,7 @@ def list_users():
     return render_template("users.html", users=users)
 
 
+# PÁGINA EXCLUSIVA PARA ADMINS: Acceder a la lista de mensajes
 route = re.sub(r"^(\/).*", r"\1messages", route)
 @app.route(route, methods=["GET", "POST"])
 def list_messages():
@@ -284,7 +310,8 @@ def list_messages():
 
     for m in messages:
         messages_list.append(dict(m))
-    
+
+    # Para descifrar mensaje (solo para enseñar)
     if request.method == "POST":
         message_id = request.form.get("id")
         message = messages_db.get_message(message_id)
@@ -306,6 +333,7 @@ def list_messages():
     return render_template("messages.html", messages=messages_list)
 
 
+# Página para acceder a tu propio perfil
 route = re.sub(r"^(\/).*", r"\1/profile", route)
 @app.route(route, methods=["GET", "POST"])
 def profile():
@@ -316,6 +344,7 @@ def profile():
         user = users_db.check_user(session["username"])
         username = user["username"]
 
+        # Función para cambiar la contraseña (con verificación de contraseña)
         if request.method == "POST" and "change_password" in request.form:
             password = request.form["password"]
             new_password = request.form["new_password"]
@@ -343,7 +372,8 @@ def profile():
             success = "Las contraseña ha sido actualizada correctamente"
 
             return render_template("profile.html", username=username, success=success)
-        
+
+        # Función para eliminar el usuario
         if request.method == "POST" and "delete_account" in request.form:
             messages_db.remove_messages(session["username"])
             users_db.remove_user(session["username"])
@@ -365,5 +395,5 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(ssl_context=("cert.pem", "key.pem"), debug=True)
-    # app.run(debug=True)
+    # app.run(ssl_context=("cert.pem", "key.pem"), debug=True)
+    app.run(debug=True)
