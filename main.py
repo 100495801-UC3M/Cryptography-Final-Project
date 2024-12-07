@@ -402,4 +402,8 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Para muestra en la defensa se ha creado un certificado autofirmado para que la web aparezca como insegura
+    app.run(ssl_context=("cert.pem", "key.pem"), debug=True)
+
+    # Si se desea quitar:
+    # app.run(debug=True)

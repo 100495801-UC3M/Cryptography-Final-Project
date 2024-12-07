@@ -26,9 +26,9 @@ class Users:
         # Añadir nuevo admin a la base de datos
         try:
             self.cursor.execute(
-                "INSERT INTO users (username, email, password, role, salt, private_key) VALUES "
-                "(?, ?, ?, ?, ?, ?)",
-                (username, email, password, "admin", salt, private_key))
+                "INSERT INTO users (username, email, password, salt, private_key) VALUES "
+                "(?, ?, ?, ?, ?)",
+                (username, email, password, salt, private_key))
             self.connection.commit()
             return True
         except sqlite3.IntegrityError:
