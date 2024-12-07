@@ -48,10 +48,10 @@ class Users:
         # Devolver lista de todos los usuarios
         return self.cursor.execute("SELECT * FROM users").fetchall()
 
-    def update_password(self, username, password):
+    def update_password(self, username, password, private_key):
         # Cambiar la contraseña
-        self.cursor.execute("UPDATE users SET password=? WHERE "
-                            "username=?",   (password, username))
+        self.cursor.execute("UPDATE users SET password=?, private_key=? WHERE username=?",
+                            (password, private_key, username))
         self.connection.commit()
 
     def remove_user(self, username):

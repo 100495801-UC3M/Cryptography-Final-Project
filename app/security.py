@@ -270,42 +270,21 @@ def create_request(username, public_key, private_key):
 
     with open(route, "wb") as f:
         f.write(csr.public_bytes(serialization.Encoding.PEM))
-
-
-def get_certificate_index(username, check_status):
-    # Obtener el índice del certificado de un usuario desde index.txt
-    with open("AC/index.txt", "r") as file:
-        for line in file:
-            fields = get_parts_as_dict(line)
-            if fields != None:
-                if fields["username"] == username:
-                    if check_status:
-                        if fields["status"] == "V":
-                            return fields["index"]
-                    else:
-                        return fields["index"]
-    return None
-
-
-def get_parts_as_dict(line):
-    # Obtener los campos de una línea de index.txt como un diccionario
-    parts = line.strip().split()
-
-    if len(parts) == 5:
-        # Certificado válido
-        return {"status": parts[0],"expiration_date": parts[1],"index": parts[2],"route": parts[3],"username": parts[4].split("=")[1]}
-    elif len(parts) == 6:
-        # Certificado revocado
-        return {"status": parts[0],"revocation_date": parts[1], "expiration_date": parts[2], "index": parts[3],"route": parts[4], "username": parts[5].split("=")[1]}
-    else:
-        # Si la línea no tiene el formato esperado
-        return None
+    
+    logging.info(
+        f"Solicitud de certificado creada para {username}. "
+        f"Clave pública: RSA, Longitud: {public_key.key_size} bits. "
+        f"Algoritmo de firma del CSR: SHA256."
+    )
 
 
 def open_certificate(cert_path):
     # Función para abrir un certificado y leer sus datos
     with open(cert_path, "rb") as f:
         cert_data = f.read()
+
+    logging.info("Certificado %s abierto y leido", cert_path)
+
     return x509.load_pem_x509_certificate(cert_data, default_backend())
 
 
@@ -315,7 +294,9 @@ def verify_certificate(cert_path):
     user_cert = open_certificate(cert_path)
 
     if verify_signature(user_cert) and verify_validity(user_cert):
+        logging.info(f"Certificado válido y verificado correctamente: {cert_path}. Algoritmo de firma: {user_cert.signature_hash_algorithm.name}")
         return True
+    logging.warning("Certificado no válido ya sea por firma incorrecta o por caducidad: %s", cert_path)
     return False
 
 
@@ -330,8 +311,10 @@ def verify_signature(cert):
             padding=padding.PKCS1v15(),
             algorithm=cert.signature_hash_algorithm
         )
+        logging.info(f"Firma del certificado verificada correctamente. Clave pública de la CA: {ca_cert.public_key().key_size} bits.")
         return True
     except InvalidSignature:
+        logging.error("La firma del certificado es incorrecta.")
         return False
     
 
@@ -339,7 +322,9 @@ def verify_validity(cert):
     # Comprobar si el certificado está dentro de su periodo de validez
     current_time = datetime.now()
     if cert.not_valid_before <= current_time <= cert.not_valid_after:
+        logging.info("Certificado dentro del periodo de validez.")
         return True
+    logging.warning("Certificado fuera del periodo de validez.")
     return False
 
 
@@ -347,6 +332,8 @@ def get_public_key_from_certificate(cert_path):
     # Obtener la clave pública de un certificado
     cert_path = "./AC/nuevoscerts/" + cert_path + ".pem"
     cert = open_certificate(cert_path)
+
+    logging.info("Clave pública obtenida del certificado: Longitud %d bits", cert.public_key().key_size)
     return cert.public_key()
 
 
@@ -355,6 +342,8 @@ def get_public_key_from_request(request_path):
     with open(request_path, "rb") as f:
         csr_data  = f.read()
     csr = x509.load_pem_x509_csr(csr_data , default_backend())
+    
+    logging.info("Clave pública obtenida: Longitud %d bits", csr.public_key().key_size)
     return csr.public_key()
 
 
@@ -387,6 +376,12 @@ def verify_message(encryped_message, hmac, signature, public_key):
                 salt_length=padding.PSS.MAX_LENGTH
             ),
             hashes.SHA256())
+        
+        logging.info("Firma verificada correctamente. Algoritmo de hash: SHA256, Padding: PSS con MGF1.")
         return True
-    except:
+    except InvalidSignature:
+        logging.error("La firma es inválida. El mensaje puede haber sido alterado.")
+        return False
+    except Exception as e:
+        logging.error(f"Error inesperado durante la verificación: {str(e)}")
         return False

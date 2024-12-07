@@ -22,7 +22,7 @@ INDEX=$(grep -w "CN=$USERNAME" "$DIR/index.txt" | awk '{if ($1 == "V") print $3}
 if [ -n "$INDEX" ]; then
     # Si se encuentra el índice en el archivo, revocar el certificado
     CERT_PATH="$CERTS_DIR/$INDEX.pem"
-    echo "🔄 El certificado '$CERT_PATH' ya existe. Revocando el certificado anterior..."
+    echo "🔄 El certificado de '$USERNAME' ya existe. Revocando el certificado anterior..."
     
     # Revocar el certificado anterior antes de aprobar el nuevo
     openssl ca -revoke $CERT_PATH -config openssl.cnf
@@ -44,18 +44,20 @@ fi
 
 
 # Aprobar la solicitud
+echo "🔄 Aprobando la solicitud..."
 openssl ca -in "$CSR_PATH" -days 365 -config openssl.cnf
 
 # Codigo extra para pobrar la fecha la caducidad
-# openssl ca -in "$CSR_PATH" -startdate "20241202100100Z" -enddate "20241203181200Z" -config openssl.cnf
+# openssl ca -in "$CSR_PATH" -startdate "20241202100100Z" -enddate "20241207111500Z" -config openssl.cnf
 
 
 if [ $? -ne 0 ]; then
     echo "❌ Error al aprobar la solicitud."
     exit 1
 fi
-echo "✅ Certificado generado"
 
+ALGORITHM=$(openssl req -in "$CSR_PATH" -noout -text | grep "Signature Algorithm" | head -1 | awk -F": " '{print $2}')
+echo "✅ Certificado generado exitosamente. Algoritmo de firma utilizado: $ALGORITHM"
 
 # Actualizar la base de datos del usuario
 DB_DIR="../app/users.py"
@@ -65,7 +67,14 @@ if [ ! -f "$DB_DIR" ]; then
     exit 1
 fi
 
+echo "🔄 Actualizando la base de datos con el nuevo número de serie: $SERIAL"
 python3 "$DB_DIR" "$USERNAME" "$SERIAL"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Error al actualizar la base de datos."
+    exit 1
+fi
+echo "✅ Base de datos actualizada correctamente."
 
 
 # Eliminar archivos innecesarios
@@ -84,6 +93,7 @@ if [ -f "$DIR/serial.old" ]; then
     echo "🗑️ Archivo serial.old eliminado."
 fi
 
+# Eliminar la solicitud procesada
 rm $CSR_PATH
 echo "🗑️ Archivo $CSR_PATH eliminado."
 

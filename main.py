@@ -59,14 +59,14 @@ def register():
             error = "Las contraseñas no coinciden"
             return render_template("register.html", error=error)
 
-        # Genera un salt para la contraseña y el hash de dicha contraseña
+        # Genera un salt para la contraseña
         salt = security.generate_salt_aes("salt", 16)
         hashed_password = security.hash(password, salt)
 
-        # Genera la clave púlica y privada
+        # Genera la clave pública y privada
         private_key, public_key = security.generate_keys()
 
-        # La clave pública se guarda en un request para que pueda ser aceptado posteriormente
+        # Se crea un request de certificado, donde posteriormente se almacenará la clave pública
         security.create_request(username, public_key, private_key)
 
         # La clave privada es encriptada con la contraseña y el salt
@@ -106,21 +106,23 @@ def login():
                 stored_password = user["password"]
                 salt = base64.urlsafe_b64decode(user["salt"])
                 if security.verify_password(stored_password, salt, password):
-                    # Si es correcta, recupera el certificado (si es que fue verificado) y se guardan los datos
                     route = user["certificate"]
+                    # Si es correcta, recupera el certificado
                     if route != "" and route is not None:
+                        # Se comprueba si el certificado es válido
                         if security.verify_certificate(route):
                             session["username"] = user["username"]
                             session["role"] = user["role"]
+
                             private_key = security.decrypt_private_key(user["private_key"], password, salt)
-                            # Serializamos la private key para mayor seguridad
                             private_key = security.serialize_private_key(private_key)
                             session["private_key"] = private_key
+
                             session.permanent = True
                             logging.info(f"Usuario {username_or_email} ha iniciado sesión.")
                             return redirect(url_for("home"))
                         else:
-                            # Si el certificado ha sido revocado, crea un nuevo request con los mismos datos
+                            # Si el certificado no es válido, se revoca y se crea un nuevo request con los mismos datos
                             public_key = security.get_public_key_from_certificate(route)
                             private_key = security.decrypt_private_key(user["private_key"], password, salt)
                             security.create_request(user["username"], public_key , private_key)
@@ -129,7 +131,7 @@ def login():
                             error = "Ha habido un error con su certificado, debe esperar a que sea aprobado en el sistema nuevamente"
                             return render_template("login.html", error=error)
                     else:
-                        # Si directamente no existe una ruta para acceder al certificado
+                        # Si directamente no existe una ruta para acceder al certificado puede ser que esté en espera
                         logging.error(f"Certificado en espera o no aceptado para {username_or_email}.")
                         error = "Debe esperar a que sea aprobado en el sistema"
                         return render_template("login.html", error=error)
@@ -139,7 +141,7 @@ def login():
                     error = "Usuario o contraseña incorrectos o la cuenta no existe"
                     return render_template("login.html", error=error)
             else:
-                # Si los datos de usuario son incorrectos (exactamente el mismo mensaje que para la contraseña)
+                # Si los datos de usuario son incorrectos (exactamente el mismo mensaje que para la contraseña para no dar indicios)
                 logging.error(f"Intento fallido de inicio de sesión para {username_or_email}.")
                 error = "Usuario o contraseña incorrectos o la cuenta no existe"
                 return render_template("login.html", error=error)
@@ -219,7 +221,7 @@ def home():
                 route = sender["certificate"]
                 sender_public_key = security.get_public_key_from_certificate(route)
 
-                # Se crea una clave AES para la confidencialidad.
+                # Se crea una clave AES para cifrar el mensaje.
                 aes_key = security.generate_salt_aes("aes", 32)
                 encrypted_message = security.encrypt_aes_message(message, aes_key)
                 hmac = security.generate_hmac(aes_key, encrypted_message)
@@ -311,7 +313,7 @@ def list_messages():
     for m in messages:
         messages_list.append(dict(m))
 
-    # Para descifrar mensaje (solo para enseñar)
+    # Para descifrar mensaje (solo para enseñar en la defensa)
     if request.method == "POST":
         message_id = request.form.get("id")
         message = messages_db.get_message(message_id)
@@ -367,8 +369,13 @@ def profile():
                 error = "Las contraseñas no coinciden"
                 return render_template("profile.html", username=username, error=error)
             
+
+            private_key = user["private_key"]
+            private_key = security.decrypt_private_key(private_key, password, salt)
+            private_key = security.encrypt_private_key(private_key, new_password, salt)
+
             hashed_password = security.hash(new_password, salt)
-            users_db.update_password(username, hashed_password)
+            users_db.update_password(username, hashed_password, private_key)
             success = "Las contraseña ha sido actualizada correctamente"
 
             return render_template("profile.html", username=username, success=success)
@@ -395,5 +402,4 @@ def logout():
 
 
 if __name__ == "__main__":
-    # app.run(ssl_context=("cert.pem", "key.pem"), debug=True)
     app.run(debug=True)
